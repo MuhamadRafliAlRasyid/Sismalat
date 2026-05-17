@@ -1,19 +1,19 @@
-// lib/pages/pengambilan_alat/pengambilan_alat_list_page.dart
+// lib/pages/pengembalian_alat/pengembalian_alat_list_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/pengambilan_provider.dart';
-import 'pengambilan_alat_detail_page.dart';
-import 'pengambilan_alat_form_page.dart';
+import '../../providers/pengembalian_provider.dart';
+import 'pengembalian_alat_detail_page.dart';
+import 'pengembalian_alat_form_page.dart';
 
-class PengambilanAlatListPage extends StatefulWidget {
-  const PengambilanAlatListPage({super.key});
+class PengembalianAlatListPage extends StatefulWidget {
+  const PengembalianAlatListPage({super.key});
 
   @override
-  State<PengambilanAlatListPage> createState() =>
-      _PengambilanAlatListPageState();
+  State<PengembalianAlatListPage> createState() =>
+      _PengembalianAlatListPageState();
 }
 
-class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
+class _PengembalianAlatListPageState extends State<PengembalianAlatListPage>
     with SingleTickerProviderStateMixin {
   final _searchCtrl = TextEditingController();
   late AnimationController _pulseController;
@@ -32,7 +32,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
     _pulseController.repeat(reverse: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PengambilanProvider>().fetchAll();
+      context.read<PengembalianProvider>().fetchAll();
     });
   }
 
@@ -43,30 +43,45 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
     super.dispose();
   }
 
-  String _namaAlat(Map<String, dynamic> item) {
-    final alat = item['alat'];
+  String _alatLabel(Map<String, dynamic> item) {
+    final pengambilan = item['pengambilan'];
+    if (pengambilan == null) return '-';
+    final alat = pengambilan['alat'];
     if (alat == null) return '-';
-    return alat['nama'] ?? alat['nama_alat'] ?? '-';
+    return alat['nama_alat'] ?? alat['nama'] ?? '-';
   }
 
   String? _gambarAlat(Map<String, dynamic> item) {
-    final alat = item['alat'];
+    final pengambilan = item['pengambilan'];
+    if (pengambilan == null) return null;
+    final alat = pengambilan['alat'];
     if (alat == null) return null;
     return alat['foto_thumb'] ?? alat['foto_url'];
   }
 
-  String _status(Map<String, dynamic> item) =>
-      item['status'] ?? item['status_label'] ?? 'dipinjam';
+  String _peminjam(Map<String, dynamic> item) {
+    if (item['nama_peminjam'] != null &&
+        item['nama_peminjam'].toString().isNotEmpty) {
+      return item['nama_peminjam'].toString();
+    }
+    final user = item['user'];
+    if (user is Map &&
+        user['name'] != null &&
+        user['name'].toString().isNotEmpty) {
+      return user['name'].toString();
+    }
+    return '-';
+  }
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<PengambilanProvider>();
+    final provider = context.watch<PengembalianProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFFEF9E7),
       appBar: AppBar(
         title: const Text(
-          'Pengambilan Alat',
+          'Pengembalian Alat',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
@@ -76,20 +91,16 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
         actions: [
           AnimatedBuilder(
             animation: _pulseAnimation,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: _pulseAnimation.value,
-                child: child,
-              );
-            },
+            builder: (context, child) =>
+                Transform.scale(scale: _pulseAnimation.value, child: child),
             child: IconButton(
               icon: const Icon(Icons.add_circle_outline, size: 28),
-              tooltip: 'Tambah Pengambilan',
+              tooltip: 'Tambah Pengembalian',
               onPressed: () async {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const PengambilanAlatFormPage(),
+                    builder: (_) => const PengembalianAlatFormPage(),
                   ),
                 );
                 provider.fetchAll();
@@ -120,16 +131,16 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
                       itemCount: provider.items.length,
                       itemBuilder: (ctx, i) {
                         final item = provider.items[i];
-                        return _StaggeredPengambilanCard(
+                        return _StaggeredPengembalianCard(
                           item: item,
                           index: i,
-                          namaAlat: _namaAlat(item),
+                          alatLabel: _alatLabel(item),
                           imageUrl: _gambarAlat(item),
-                          status: _status(item),
+                          peminjam: _peminjam(item),
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => PengambilanAlatDetailPage(
+                              builder: (_) => PengembalianAlatDetailPage(
                                 hashid: item['hashid'] ?? '',
                               ),
                             ),
@@ -162,7 +173,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
         controller: _searchCtrl,
         style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(
-          hintText: 'Cari peminjam, alat, atau keperluan...',
+          hintText: 'Cari alat, peminjam...',
           hintStyle: TextStyle(color: Colors.grey.shade400),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 16, right: 8),
@@ -173,7 +184,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
                   icon: const Icon(Icons.clear, color: Colors.grey),
                   onPressed: () {
                     _searchCtrl.clear();
-                    context.read<PengambilanProvider>().fetchAll();
+                    context.read<PengembalianProvider>().fetchAll();
                   },
                 )
               : null,
@@ -190,7 +201,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
         ),
         onChanged: (_) => setState(() {}),
         onSubmitted: (v) =>
-            context.read<PengambilanProvider>().fetchAll(search: v),
+            context.read<PengembalianProvider>().fetchAll(search: v),
       ),
     );
   }
@@ -206,7 +217,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
     );
   }
 
-  Widget _buildError(PengambilanProvider provider) {
+  Widget _buildError(PengembalianProvider provider) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -249,14 +260,10 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.move_to_inbox_outlined,
-              size: 72,
-              color: Colors.amber.shade200,
-            ),
+            Icon(Icons.history, size: 72, color: Colors.amber.shade200),
             const SizedBox(height: 12),
             Text(
-              'Belum ada pengambilan',
+              'Belum ada pengembalian',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
@@ -265,7 +272,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
             ),
             const SizedBox(height: 4),
             Text(
-              'Tambahkan dengan tombol +',
+              'Data akan muncul setelah ada pengembalian',
               style: TextStyle(color: Colors.grey.shade500),
             ),
           ],
@@ -275,30 +282,30 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
   }
 }
 
-// ---------- Kartu Pengambilan dengan Animasi ----------
-class _StaggeredPengambilanCard extends StatefulWidget {
+// ---------- Kartu Pengembalian dengan Animasi Stagger ----------
+class _StaggeredPengembalianCard extends StatefulWidget {
   final Map<String, dynamic> item;
   final int index;
-  final String namaAlat;
+  final String alatLabel;
   final String? imageUrl;
-  final String status;
+  final String peminjam;
   final VoidCallback onTap;
 
-  const _StaggeredPengambilanCard({
+  const _StaggeredPengembalianCard({
     required this.item,
     required this.index,
-    required this.namaAlat,
+    required this.alatLabel,
     required this.imageUrl,
-    required this.status,
+    required this.peminjam,
     required this.onTap,
   });
 
   @override
-  State<_StaggeredPengambilanCard> createState() =>
-      _StaggeredPengambilanCardState();
+  State<_StaggeredPengembalianCard> createState() =>
+      _StaggeredPengembalianCardState();
 }
 
-class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
+class _StaggeredPengembalianCardState extends State<_StaggeredPengembalianCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
@@ -318,7 +325,6 @@ class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
       begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
-
     Future.delayed(Duration(milliseconds: 80 * widget.index), () {
       if (mounted) _animController.forward();
     });
@@ -332,15 +338,8 @@ class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
-    final peminjam =
-        item['nama_peminjam'] ?? item['user']?['name'] ?? 'Tanpa Nama';
-    final keperluan = item['keperluan'] ?? '-';
-    final statusColor = (widget.status.toLowerCase() == 'dipinjam')
-        ? const Color(0xFFD97706)
-        : (widget.status.toLowerCase() == 'selesai')
-        ? Colors.green
-        : Colors.red;
+    final jumlah = '${widget.item['jumlah'] ?? 0}';
+    final tanggal = widget.item['tanggal_pengembalian'] ?? '-';
 
     return AnimatedBuilder(
       animation: _animController,
@@ -384,7 +383,7 @@ class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        widget.namaAlat,
+                        widget.alatLabel,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -395,19 +394,15 @@ class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        peminjam,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        keperluan,
+                        widget.peminjam,
                         style: TextStyle(
-                          color: Colors.grey.shade600,
+                          color: Colors.grey.shade700,
                           fontSize: 13,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        item['waktu_pengambilan'] ?? '-',
+                        'Jumlah: $jumlah | Tgl: $tanggal',
                         style: TextStyle(
                           color: Colors.grey.shade500,
                           fontSize: 12,
@@ -416,24 +411,7 @@ class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    widget.status,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
+                Icon(Icons.chevron_right, color: Colors.grey.shade400),
               ],
             ),
           ),
@@ -521,12 +499,9 @@ class _ShimmerCardState extends State<_ShimmerCard>
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  width: 60,
+                  width: 24,
                   height: 24,
-                  decoration: BoxDecoration(
-                    color: _shimmerAnimation.value,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  color: _shimmerAnimation.value,
                 ),
               ],
             ),
@@ -537,7 +512,7 @@ class _ShimmerCardState extends State<_ShimmerCard>
   }
 }
 
-// ---------- Scale Tap (sama) ----------
+// ---------- Scale Tap ----------
 class _ScaleTap extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -582,9 +557,8 @@ class _ScaleTapState extends State<_ScaleTap>
       onTapCancel: () => _controller.reverse(),
       child: AnimatedBuilder(
         animation: _scaleAnimation,
-        builder: (context, child) {
-          return Transform.scale(scale: _scaleAnimation.value, child: child);
-        },
+        builder: (context, child) =>
+            Transform.scale(scale: _scaleAnimation.value, child: child),
         child: widget.child,
       ),
     );

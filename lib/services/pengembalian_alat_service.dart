@@ -6,27 +6,24 @@ class PengembalianAlatService {
   PengembalianAlatService({required String baseUrl, required String token})
     : _api = ApiBase(baseUrl: baseUrl, token: token);
 
-  /// Get list pengembalian
   Future<Map<String, dynamic>> getPengembalian({
     String? search,
-    String? tanggal, // format yyyy-mm-dd
+    String? tanggal,
+    String? alatHashid,
     int perPage = 10,
   }) async {
     final params = <String, String>{};
     if (search != null) params['search'] = search;
     if (tanggal != null) params['tanggal'] = tanggal;
+    if (alatHashid != null) params['alat_id'] = alatHashid;
     params['per_page'] = perPage.toString();
-
     return await _api.get('pengembalian_alat', queryParams: params);
   }
 
-  /// Get detail pengembalian
   Future<Map<String, dynamic>> getDetail(String hashid) async {
     return await _api.get('pengembalian_alat/$hashid');
   }
 
-  /// Create pengembalian (mengacu ke pengambilan tertentu)
-  /// `pengambilanHashid` adalah hashid dari pengambilan alat
   Future<Map<String, dynamic>> create({
     required String pengambilanHashid,
     required int jumlah,
@@ -49,7 +46,6 @@ class PengembalianAlatService {
     return await _api.post(endpoint, body: fields);
   }
 
-  /// Update pengembalian
   Future<Map<String, dynamic>> update(
     String hashid, {
     required int jumlah,
@@ -72,7 +68,6 @@ class PengembalianAlatService {
     return await _api.put(endpoint, body: fields);
   }
 
-  /// Delete pengembalian
   Future<Map<String, dynamic>> delete(String hashid) async {
     return await _api.delete('pengembalian_alat/$hashid');
   }

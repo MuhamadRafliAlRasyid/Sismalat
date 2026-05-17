@@ -3,7 +3,6 @@ import '../../services/bagian_service.dart';
 
 class BagianFormPage extends StatefulWidget {
   final String? hashid;
-
   const BagianFormPage({super.key, this.hashid});
 
   @override
@@ -12,7 +11,6 @@ class BagianFormPage extends StatefulWidget {
 
 class _BagianFormPageState extends State<BagianFormPage> {
   final _formKey = GlobalKey<FormState>();
-
   bool isLoading = false;
   bool isEdit = false;
 
@@ -22,7 +20,6 @@ class _BagianFormPageState extends State<BagianFormPage> {
   void initState() {
     super.initState();
     isEdit = widget.hashid != null && widget.hashid!.isNotEmpty;
-
     if (isEdit) {
       _loadBagianDetail();
     }
@@ -30,24 +27,16 @@ class _BagianFormPageState extends State<BagianFormPage> {
 
   Future<void> _loadBagianDetail() async {
     setState(() => isLoading = true);
-
     try {
       final result = await BagianService.getById(widget.hashid!);
-
       if (result['status'] == true && result['data'] != null) {
-        final data = result['data'];
-
-        _namaBagianCtrl.text = data['nama'] ?? '';
-
-        print("✅ Bagian loaded: ${data['nama']}");
+        _namaBagianCtrl.text = result['data']['nama'] ?? '';
       } else {
         _showError(result['message'] ?? 'Gagal memuat data');
       }
     } catch (e) {
-      print("❌ ERROR load bagian: $e");
       _showError("Terjadi kesalahan saat mengambil data");
     }
-
     if (mounted) setState(() => isLoading = false);
   }
 
@@ -60,7 +49,6 @@ class _BagianFormPageState extends State<BagianFormPage> {
 
     try {
       Map<String, dynamic> result;
-
       if (isEdit) {
         result = await BagianService.update(widget.hashid!, data);
       } else {
@@ -76,7 +64,6 @@ class _BagianFormPageState extends State<BagianFormPage> {
         _showError(result['message'] ?? 'Gagal menyimpan data');
       }
     } catch (e) {
-      print("❌ ERROR save bagian: $e");
       _showError("Terjadi kesalahan saat menyimpan");
     }
 
@@ -100,9 +87,17 @@ class _BagianFormPageState extends State<BagianFormPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(isEdit ? 'Edit Bagian' : 'Tambah Bagian')),
+      backgroundColor: const Color(0xFFFEF9E7),
+      appBar: AppBar(
+        title: Text(isEdit ? 'Edit Bagian' : 'Tambah Bagian'),
+        backgroundColor: const Color(0xFFD97706),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFD97706)),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Form(
@@ -111,35 +106,61 @@ class _BagianFormPageState extends State<BagianFormPage> {
                   children: [
                     TextFormField(
                       controller: _namaBagianCtrl,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Nama Bagian',
-                        border: OutlineInputBorder(),
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFFBBF24),
+                            width: 2,
+                          ),
+                        ),
                       ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty)
                           return 'Nama bagian wajib diisi';
-                        }
                         return null;
                       },
                     ),
-
                     const SizedBox(height: 24),
-
                     SizedBox(
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
                         onPressed: isLoading ? null : _save,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF001F3F),
+                          backgroundColor: const Color(0xFFD97706),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 2,
                         ),
                         child: isLoading
-                            ? const CircularProgressIndicator(
-                                color: Colors.white,
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               )
                             : Text(
                                 isEdit ? 'Simpan Perubahan' : 'Tambah Bagian',
-                                style: const TextStyle(fontSize: 16),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                       ),
                     ),

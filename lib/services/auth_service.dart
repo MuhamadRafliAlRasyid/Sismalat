@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../config/api.dart';
 
 class AuthService {
@@ -46,6 +47,64 @@ class AuthService {
       return data;
     } catch (e) {
       return {"status": false, "message": "Gagal terhubung ke server"};
+    }
+  }
+
+  // ==================== LOGIN DENGAN GOOGLE ====================
+  static Future<Map<String, dynamic>> loginWithGoogle() async {
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        return {
+          "status": false,
+          "message": "Login Google dibatalkan oleh pengguna",
+        };
+      }
+
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      if (idToken == null) {
+        return {
+          "status": false,
+          "message": "Gagal mendapatkan ID token Google",
+        };
+      }
+
+      // Kirim ID token ke endpoint API Laravel yang baru Anda buat
+      final response = await http.post(
+        Uri.parse("${Api.baseUrl}/auth/google"), // Sesuaikan dengan route Anda
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: jsonEncode({"id_token": idToken}),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['status'] == true) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_tokenKey, data['token']);
+
+        if (data['user'] != null) {
+          await prefs.setString(
+            'user_id',
+            data['user']['id']?.toString() ?? '',
+          );
+          await prefs.setString(
+            'bagian_id',
+            data['user']['bagian_id']?.toString() ?? '',
+          );
+        }
+      }
+
+      return data;
+    } catch (e) {
+      return {"status": false, "message": "Gagal login dengan Google: $e"};
     }
   }
 
@@ -313,5 +372,17 @@ class AuthService {
   static Future<void> clearTempSparepart() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tempSparepartKey);
+  }
+
+  static Future<int?> getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString('user_id');
+    return id != null ? int.tryParse(id) : null;
+  }
+
+  static Future<int?> getBagianId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final id = prefs.getString('bagian_id');
+    return id != null ? int.tryParse(id) : null;
   }
 }

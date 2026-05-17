@@ -3,7 +3,15 @@ import 'package:provider/provider.dart';
 
 // Services & Providers
 import 'services/alat_service.dart';
-import 'services/provider/alat_provider.dart';
+import 'services/kalibrasi_service.dart';
+import 'services/kategori_service.dart';
+import 'services/pengambilan_alat_service.dart';
+import 'services/pengembalian_alat_service.dart';
+import 'providers/alat_provider.dart';
+import 'providers/kalibrasi_provider.dart';
+import 'providers/kategori_provider.dart';
+import 'providers/pengambilan_provider.dart';
+import 'providers/pengembalian_provider.dart';
 
 // Auth
 import 'pages/auth/login_page.dart';
@@ -19,17 +27,17 @@ import 'pages/profile/user_list_page.dart';
 import 'pages/bagian/bagian_list_page.dart';
 import 'pages/bagian/bagian_form_page.dart';
 
-// Pengembalian
+// Pengembalian (sparepart)
 import 'pages/pengembalian/pengembalian_list_page.dart';
-import 'pages/pengembalian/pengembalian_form_page.dart';
+import 'pages/pengembalian/pengembalian_form_page.dart' as sparepart_form;
 
-// Barang
+// Barang (sparepart)
 import 'pages/barang/barang_list_page.dart';
 import 'pages/barang/barang_form_page.dart';
 import 'pages/barang/barang_detail_page.dart';
 import 'pages/barang/trashed_barang_page.dart';
 
-// Pengambilan
+// Pengambilan (sparepart)
 import 'pages/pengambilan/pengambilan_list_page.dart';
 import 'pages/pengambilan/pengambilan_form_page.dart';
 import 'pages/pengambilan/pengambilan_detail_page.dart';
@@ -45,28 +53,89 @@ import 'pages/profile/notification_page.dart';
 // QR Scanner & Landing
 import 'pages/qr_scanner_page.dart';
 import 'pages/landing_page.dart';
+import 'pages/splash_page.dart';
 
-// Alat (baru)
+// Alat (inventaris alat)
 import 'pages/alat/alat_list_page.dart';
 import 'pages/alat/alat_form_page.dart';
 import 'pages/alat/alat_detail_page.dart';
+import 'pages/alat/riwayat_alat_page.dart';
 
-void main() {
-  // Inisialisasi service (token akan diatur setelah login)
-  final alatService = AlatService(
-    baseUrl: 'https://your-api-url.com/api', // ganti dengan URL backend Anda
-    token: '', // nanti diisi setelah login
-  );
+// Kategori
+import 'pages/kategori/kategori_list_page.dart';
+import 'pages/kategori/kategori_form_page.dart';
 
+// Kalibrasi
+import 'pages/kalibrasi/kalibrasi_list_page.dart';
+import 'pages/kalibrasi/kalibrasi_detail_page.dart';
+import 'pages/kalibrasi/kalibrasi_form_page.dart';
+
+// Pengambilan Alat
+import 'pages/pengambilan_alat/pengambilan_alat_list_page.dart';
+import 'pages/pengambilan_alat/pengambilan_alat_detail_page.dart';
+import 'pages/pengambilan_alat/pengambilan_alat_form_page.dart';
+
+// Pengembalian Alat
+import 'pages/pengembalian_alat/pengembalian_alat_list_page.dart';
+import 'pages/pengembalian_alat/pengembalian_alat_detail_page.dart';
+import 'pages/pengembalian_alat/pengembalian_alat_form_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  const baseUrl = 'http://192.168.1.8:8000/api';
+
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString('auth_token') ?? '';
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    if (details.exception is FlutterError &&
+        details.exception.toString().contains(
+          'Cannot hit test a render box that has never been laid out',
+        )) {
+      return;
+    }
+    FlutterError.presentError(details);
+  };
   runApp(
     MultiProvider(
       providers: [
-        // Provider untuk AlatProvider (state management list alat)
-        ChangeNotifierProvider(
-          create: (_) => AlatProvider(service: alatService),
+        // Alat
+        Provider<AlatService>(
+          create: (_) => AlatService(baseUrl: baseUrl, token: token),
         ),
-        // Provider untuk AlatService (agar bisa diakses langsung via context.read)
-        Provider.value(value: alatService),
+        ChangeNotifierProvider<AlatProvider>(
+          create: (ctx) => AlatProvider(alatService: ctx.read()),
+        ),
+        // Kalibrasi
+        Provider<KalibrasiService>(
+          create: (_) => KalibrasiService(baseUrl: baseUrl, token: token),
+        ),
+        ChangeNotifierProvider<KalibrasiProvider>(
+          create: (ctx) => KalibrasiProvider(service: ctx.read()),
+        ),
+        // Kategori
+        Provider<KategoriService>(
+          create: (_) => KategoriService(baseUrl: baseUrl, token: token),
+        ),
+        ChangeNotifierProvider<KategoriProvider>(
+          create: (ctx) => KategoriProvider(service: ctx.read()),
+        ),
+        // Pengambilan Alat
+        Provider<PengambilanAlatService>(
+          create: (_) => PengambilanAlatService(baseUrl: baseUrl, token: token),
+        ),
+        ChangeNotifierProvider<PengambilanProvider>(
+          create: (ctx) => PengambilanProvider(service: ctx.read()),
+        ),
+        // Pengembalian Alat
+        Provider<PengembalianAlatService>(
+          create: (_) =>
+              PengembalianAlatService(baseUrl: baseUrl, token: token),
+        ),
+        ChangeNotifierProvider<PengembalianProvider>(
+          create: (ctx) => PengembalianProvider(service: ctx.read()),
+        ),
       ],
       child: const MyApp(),
     ),
@@ -82,7 +151,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Inventaris Dinas',
       theme: _buildAppTheme(),
-      initialRoute: '/landing_page',
+      initialRoute: '/splash',
       routes: {
         '/login': (context) => const LoginPage(),
         '/register': (context) => const RegisterPage(),
@@ -91,7 +160,7 @@ class MyApp extends StatelessWidget {
         '/landing_page': (context) => const LandingPage(),
         '/notifications': (context) => const NotificationPage(),
         '/qr-scanner': (context) => const QRScannerPage(),
-
+        '/splash': (context) => const SplashPage(),
         // Bagian
         '/bagian/list': (context) => const BagianListPage(),
         '/bagian/form': (context) {
@@ -99,7 +168,6 @@ class MyApp extends StatelessWidget {
           return BagianFormPage(hashid: hashid);
         },
 
-        // Profile Edit
         '/profile/edit': (context) {
           final userData =
               ModalRoute.of(context)?.settings.arguments
@@ -107,10 +175,8 @@ class MyApp extends StatelessWidget {
           return EditProfilePage(userData: userData);
         },
 
-        // User Management
         '/user/list': (context) => const UserListPage(),
 
-        // Barang
         '/barang/list': (context) => const BarangListPage(),
         '/barang/form': (context) {
           final hashid = ModalRoute.of(context)?.settings.arguments as String?;
@@ -118,25 +184,26 @@ class MyApp extends StatelessWidget {
         },
         '/barang/trashed': (context) => const TrashedBarangPage(),
 
-        // Pengambilan
         '/pengambilan/list': (context) => const PengambilanListPage(),
-        '/pengambilan/form': (context) {
+        // contoh di main.dart atau AppRouter
+        '/pengambilan_alat/form': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
           String? hashid;
-          String? sparepartHashid;
-          if (args is String) {
+          String? alatHashid;
+          if (args is Map<String, dynamic>) {
+            hashid = args['hashid'];
+            alatHashid = args['alatHashid'];
+          } else if (args is String) {
+            // jika argumen berupa string, anggap sebagai hashid edit
             hashid = args;
-          } else if (args is Map<String, dynamic>) {
-            hashid = args['hashid'] as String?;
-            sparepartHashid = args['sparepartHashid'] as String?;
           }
-          return PengambilanFormPage(
+          return PengambilanAlatFormPage(
             hashid: hashid,
-            sparepartHashid: sparepartHashid,
+            alatHashid: alatHashid,
           );
         },
 
-        // Pengembalian
+        // Pengembalian Sparepart (pakai alias)
         '/pengembalian/list': (context) => const PengembalianListPage(),
         '/pengembalian/form': (context) {
           final args = ModalRoute.of(context)?.settings.arguments;
@@ -146,10 +213,9 @@ class MyApp extends StatelessWidget {
           } else if (args is Map<String, dynamic>) {
             hashid = args['hashid'] as String?;
           }
-          return PengembalianFormPage(hashid: hashid);
+          return sparepart_form.PengembalianFormPage(hashid: hashid);
         },
 
-        // Purchase Request
         '/purchase/list': (context) => const PurchaseRequestListPage(),
         '/purchase/form': (context) {
           final args =
@@ -161,22 +227,61 @@ class MyApp extends StatelessWidget {
           );
         },
 
-        // Alat (sesuai dengan service baru)
+        // Alat
         '/alat/list': (context) => const AlatListPage(),
         '/alat/form': (context) {
           final hashid = ModalRoute.of(context)?.settings.arguments as String?;
           return AlatFormPage(hashid: hashid);
         },
-        '/alat/trashed': (context) {
-          // halaman trashed bisa dibuat terpisah, sementara arahkan ke list dulu
-          // TODO: implementasikan halaman trashed untuk alat
-          return const Scaffold(
-            body: Center(child: Text('Trashed Alat - Coming Soon')),
+        '/alat/trashed': (context) => const Scaffold(
+          body: Center(child: Text('Trashed Alat - Coming Soon')),
+        ),
+        '/alat/riwayat': (context) {
+          final args =
+              ModalRoute.of(context)?.settings.arguments
+                  as Map<String, dynamic>;
+          return RiwayatAlatPage(
+            alatHashid: args['alatHashid'],
+            namaAlat: args['namaAlat'],
           );
+        },
+
+        '/kategori/list': (context) => const KategoriListPage(),
+        '/kategori/form': (context) {
+          final hashid = ModalRoute.of(context)?.settings.arguments as String?;
+          return KategoriFormPage(hashid: hashid);
+        },
+
+        '/kalibrasi/list': (context) => const KalibrasiListPage(),
+        '/kalibrasi/form': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          String? hashid;
+          String? alatHashid;
+          if (args is Map<String, dynamic>) {
+            hashid = args['hashid'] as String?;
+            alatHashid = args['alatHashid'] as String?;
+          }
+          return KalibrasiFormPage(hashid: hashid, alatHashid: alatHashid);
+        },
+
+        '/pengambilan_alat/list': (context) => const PengambilanAlatListPage(),
+        '/pengambilan_alat/form': (context) {
+          final hashid = ModalRoute.of(context)?.settings.arguments as String?;
+          return PengambilanAlatFormPage(hashid: hashid);
+        },
+
+        '/pengembalian_alat/list': (context) =>
+            const PengembalianAlatListPage(),
+        '/pengembalian_alat/form': (context) {
+          final args = ModalRoute.of(context)?.settings.arguments;
+          String? hashid;
+          if (args is Map<String, dynamic>) {
+            hashid = args['hashid'] as String?;
+          }
+          return PengembalianAlatFormPage(hashid: hashid);
         },
       },
       onGenerateRoute: (settings) {
-        // Detail routes (menggunakan arguments)
         if (settings.name == '/barang/detail') {
           final hashid = settings.arguments as String?;
           return MaterialPageRoute(
@@ -202,8 +307,25 @@ class MyApp extends StatelessWidget {
             builder: (context) => AlatDetailPage(hashid: hashid ?? ''),
           );
         }
+        if (settings.name == '/kalibrasi/detail') {
+          final hashid = settings.arguments as String?;
+          return MaterialPageRoute(
+            builder: (_) => KalibrasiDetailPage(hashid: hashid ?? ''),
+          );
+        }
+        if (settings.name == '/pengambilan_alat/detail') {
+          final hashid = settings.arguments as String?;
+          return MaterialPageRoute(
+            builder: (_) => PengambilanAlatDetailPage(hashid: hashid ?? ''),
+          );
+        }
+        if (settings.name == '/pengembalian_alat/detail') {
+          final hashid = settings.arguments as String?;
+          return MaterialPageRoute(
+            builder: (_) => PengembalianAlatDetailPage(hashid: hashid ?? ''),
+          );
+        }
 
-        // Fallback
         return MaterialPageRoute(
           builder: (context) => Scaffold(
             appBar: AppBar(title: const Text('Halaman Tidak Ditemukan')),

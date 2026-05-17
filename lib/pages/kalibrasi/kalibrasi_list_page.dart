@@ -1,19 +1,18 @@
-// lib/pages/pengambilan_alat/pengambilan_alat_list_page.dart
+// lib/pages/kalibrasi/kalibrasi_list_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/pengambilan_provider.dart';
-import 'pengambilan_alat_detail_page.dart';
-import 'pengambilan_alat_form_page.dart';
+import '../../providers/kalibrasi_provider.dart';
+import 'kalibrasi_detail_page.dart';
+import 'kalibrasi_form_page.dart';
 
-class PengambilanAlatListPage extends StatefulWidget {
-  const PengambilanAlatListPage({super.key});
+class KalibrasiListPage extends StatefulWidget {
+  const KalibrasiListPage({super.key});
 
   @override
-  State<PengambilanAlatListPage> createState() =>
-      _PengambilanAlatListPageState();
+  State<KalibrasiListPage> createState() => _KalibrasiListPageState();
 }
 
-class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
+class _KalibrasiListPageState extends State<KalibrasiListPage>
     with SingleTickerProviderStateMixin {
   final _searchCtrl = TextEditingController();
   late AnimationController _pulseController;
@@ -32,7 +31,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
     _pulseController.repeat(reverse: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<PengambilanProvider>().fetchAll();
+      context.read<KalibrasiProvider>().fetchAll();
     });
   }
 
@@ -43,30 +42,20 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
     super.dispose();
   }
 
-  String _namaAlat(Map<String, dynamic> item) {
-    final alat = item['alat'];
-    if (alat == null) return '-';
-    return alat['nama'] ?? alat['nama_alat'] ?? '-';
-  }
+  String _namaAlat(Map<String, dynamic> item) => item['alat']?['nama'] ?? '-';
 
-  String? _gambarAlat(Map<String, dynamic> item) {
-    final alat = item['alat'];
-    if (alat == null) return null;
-    return alat['foto_thumb'] ?? alat['foto_url'];
-  }
-
-  String _status(Map<String, dynamic> item) =>
-      item['status'] ?? item['status_label'] ?? 'dipinjam';
+  String? _gambarAlat(Map<String, dynamic> item) =>
+      item['alat']?['foto_thumb'] ?? item['alat']?['foto_url'];
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<PengambilanProvider>();
+    final provider = context.watch<KalibrasiProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFFEF9E7),
       appBar: AppBar(
         title: const Text(
-          'Pengambilan Alat',
+          'Riwayat Kalibrasi',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
@@ -84,13 +73,11 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
             },
             child: IconButton(
               icon: const Icon(Icons.add_circle_outline, size: 28),
-              tooltip: 'Tambah Pengambilan',
+              tooltip: 'Tambah Kalibrasi',
               onPressed: () async {
                 await Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const PengambilanAlatFormPage(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const KalibrasiFormPage()),
                 );
                 provider.fetchAll();
               },
@@ -120,16 +107,15 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
                       itemCount: provider.items.length,
                       itemBuilder: (ctx, i) {
                         final item = provider.items[i];
-                        return _StaggeredPengambilanCard(
+                        return _StaggeredKalibrasiCard(
                           item: item,
                           index: i,
                           namaAlat: _namaAlat(item),
                           imageUrl: _gambarAlat(item),
-                          status: _status(item),
                           onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => PengambilanAlatDetailPage(
+                              builder: (_) => KalibrasiDetailPage(
                                 hashid: item['hashid'] ?? '',
                               ),
                             ),
@@ -162,18 +148,18 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
         controller: _searchCtrl,
         style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(
-          hintText: 'Cari peminjam, alat, atau keperluan...',
+          hintText: 'Cari no sertifikat, alat, atau tanggal...',
           hintStyle: TextStyle(color: Colors.grey.shade400),
           prefixIcon: Padding(
             padding: const EdgeInsets.only(left: 16, right: 8),
-            child: Icon(Icons.search_rounded, color: const Color(0xFFD97706)),
+            child: Icon(Icons.search_rounded, color: Color(0xFFD97706)),
           ),
           suffixIcon: _searchCtrl.text.isNotEmpty
               ? IconButton(
                   icon: const Icon(Icons.clear, color: Colors.grey),
                   onPressed: () {
                     _searchCtrl.clear();
-                    context.read<PengambilanProvider>().fetchAll();
+                    context.read<KalibrasiProvider>().fetchAll();
                   },
                 )
               : null,
@@ -190,7 +176,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
         ),
         onChanged: (_) => setState(() {}),
         onSubmitted: (v) =>
-            context.read<PengambilanProvider>().fetchAll(search: v),
+            context.read<KalibrasiProvider>().fetchAll(search: v),
       ),
     );
   }
@@ -206,7 +192,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
     );
   }
 
-  Widget _buildError(PengambilanProvider provider) {
+  Widget _buildError(KalibrasiProvider provider) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -244,19 +230,16 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0.0, end: 1.0),
         duration: const Duration(milliseconds: 600),
-        builder: (context, value, child) =>
-            Opacity(opacity: value, child: child),
+        builder: (context, value, child) {
+          return Opacity(opacity: value, child: child);
+        },
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.move_to_inbox_outlined,
-              size: 72,
-              color: Colors.amber.shade200,
-            ),
+            Icon(Icons.event_note, size: 72, color: Colors.amber.shade200),
             const SizedBox(height: 12),
             Text(
-              'Belum ada pengambilan',
+              'Belum ada data kalibrasi',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w500,
@@ -265,7 +248,7 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
             ),
             const SizedBox(height: 4),
             Text(
-              'Tambahkan dengan tombol +',
+              'Tambahkan kalibrasi dengan tombol +',
               style: TextStyle(color: Colors.grey.shade500),
             ),
           ],
@@ -275,30 +258,28 @@ class _PengambilanAlatListPageState extends State<PengambilanAlatListPage>
   }
 }
 
-// ---------- Kartu Pengambilan dengan Animasi ----------
-class _StaggeredPengambilanCard extends StatefulWidget {
+// ---------- Kartu Kalibrasi dengan Animasi Stagger ----------
+class _StaggeredKalibrasiCard extends StatefulWidget {
   final Map<String, dynamic> item;
   final int index;
   final String namaAlat;
   final String? imageUrl;
-  final String status;
   final VoidCallback onTap;
 
-  const _StaggeredPengambilanCard({
+  const _StaggeredKalibrasiCard({
     required this.item,
     required this.index,
     required this.namaAlat,
     required this.imageUrl,
-    required this.status,
     required this.onTap,
   });
 
   @override
-  State<_StaggeredPengambilanCard> createState() =>
-      _StaggeredPengambilanCardState();
+  State<_StaggeredKalibrasiCard> createState() =>
+      _StaggeredKalibrasiCardState();
 }
 
-class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
+class _StaggeredKalibrasiCardState extends State<_StaggeredKalibrasiCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
@@ -333,15 +314,6 @@ class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
   @override
   Widget build(BuildContext context) {
     final item = widget.item;
-    final peminjam =
-        item['nama_peminjam'] ?? item['user']?['name'] ?? 'Tanpa Nama';
-    final keperluan = item['keperluan'] ?? '-';
-    final statusColor = (widget.status.toLowerCase() == 'dipinjam')
-        ? const Color(0xFFD97706)
-        : (widget.status.toLowerCase() == 'selesai')
-        ? Colors.green
-        : Colors.red;
-
     return AnimatedBuilder(
       animation: _animController,
       builder: (context, child) {
@@ -395,11 +367,7 @@ class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        peminjam,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      Text(
-                        keperluan,
+                        'Sertifikat: ${item['no_sertifikat'] ?? '-'}',
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 13,
@@ -407,33 +375,27 @@ class _StaggeredPengambilanCardState extends State<_StaggeredPengambilanCard>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        item['waktu_pengambilan'] ?? '-',
+                        'Tgl: ${item['tanggal_kalibrasi'] ?? "-"}',
                         style: TextStyle(
                           color: Colors.grey.shade500,
                           fontSize: 12,
                         ),
                       ),
+                      if (item['masa_berlaku_baru'] != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Berlaku s/d: ${item['masa_berlaku_baru']}',
+                            style: TextStyle(
+                              color: Colors.green.shade600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    widget.status,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
+                Icon(Icons.chevron_right, color: Colors.grey.shade400),
               ],
             ),
           ),
@@ -521,12 +483,9 @@ class _ShimmerCardState extends State<_ShimmerCard>
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  width: 60,
+                  width: 24,
                   height: 24,
-                  decoration: BoxDecoration(
-                    color: _shimmerAnimation.value,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  color: _shimmerAnimation.value,
                 ),
               ],
             ),
@@ -537,7 +496,7 @@ class _ShimmerCardState extends State<_ShimmerCard>
   }
 }
 
-// ---------- Scale Tap (sama) ----------
+// ---------- Scale Tap (sama seperti sebelumnya) ----------
 class _ScaleTap extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;

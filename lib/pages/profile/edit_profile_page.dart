@@ -1,3 +1,4 @@
+// lib/pages/profile/edit_profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -5,9 +6,7 @@ import '../../services/auth_service.dart';
 import '../../config/api.dart';
 
 class EditProfilePage extends StatefulWidget {
-  final Map<String, dynamic>?
-  userData; // null = Tambah User, ada data = Edit Profil
-
+  final Map<String, dynamic>? userData;
   const EditProfilePage({super.key, this.userData});
 
   @override
@@ -25,7 +24,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
   File? _selectedImage;
   String? _currentPhotoPath;
 
-  // Hanya untuk Tambah User
   String? selectedRole = 'karyawan';
   int? selectedBagianId;
 
@@ -41,13 +39,11 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   void initState() {
     super.initState();
-
     if (isEditMode && widget.userData != null) {
       final user = widget.userData!;
       _nameCtrl.text = user['name'] ?? '';
       _emailCtrl.text = user['email'] ?? '';
       _currentPhotoPath = user['profile_photo_path'];
-
       selectedRole = user['role'];
       selectedBagianId = user['bagian_id'];
     } else {
@@ -76,26 +72,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => isLoading = true);
 
     Map<String, dynamic> result;
-
     if (isEditMode && widget.userData != null) {
       final hashid =
           widget.userData!['hashid'] as String? ??
           widget.userData!['id']?.toString() ??
           '';
-
-      final nameToSend = _nameCtrl.text.trim();
-
-      print(
-        '🔄 Mencoba UPDATE USER -> hashid: $hashid | name: "$nameToSend" | length: ${nameToSend.length}',
-      );
-
       result = await AuthService.updateUser(
         hashid: hashid,
-        name: _nameCtrl.text.trim(), // Pastikan ini tidak kosong
+        name: _nameCtrl.text.trim(),
         email: null,
         role: null,
         bagianId: null,
@@ -115,11 +102,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
 
     setState(() => isLoading = false);
-
-    print(
-      '📥 HASIL SAVE: status=${result['status']}, message=${result['message']}',
-    );
-
     if (result['status'] == true && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -145,162 +127,283 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFFEF9E7),
       appBar: AppBar(
         title: Text(isEditMode ? 'Edit Profil' : 'Tambah User'),
-        backgroundColor: const Color(0xFF001F3F),
+        backgroundColor: const Color(0xFFD97706),
+        foregroundColor: Colors.white,
+        elevation: 0,
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFFD97706)),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Form(
                 key: _formKey,
                 child: Column(
                   children: [
-                    // Foto Profil
-                    GestureDetector(
-                      onTap: _pickImage,
-                      child: Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          CircleAvatar(
-                            radius: 70,
-                            backgroundImage: _selectedImage != null
-                                ? FileImage(_selectedImage!)
-                                : (_currentPhotoPath != null
-                                      ? NetworkImage(
-                                          '${Api.baseUrl}/images/profile/$_currentPhotoPath',
-                                        )
-                                      : null),
-                            child:
-                                _selectedImage == null &&
-                                    _currentPhotoPath == null
-                                ? const Icon(
-                                    Icons.person,
-                                    size: 80,
-                                    color: Colors.grey,
-                                  )
-                                : null,
-                          ),
-                          const CircleAvatar(
-                            radius: 18,
-                            backgroundColor: Colors.blue,
-                            child: Icon(
-                              Icons.camera_alt,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Ketuk untuk mengganti foto',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
+                    _staggeredField(0, _buildAvatarPicker()),
                     const SizedBox(height: 30),
-
-                    TextFormField(
-                      controller: _nameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Nama Lengkap',
-                        border: OutlineInputBorder(),
+                    _staggeredField(
+                      1,
+                      _buildTextField(
+                        controller: _nameCtrl,
+                        label: 'Nama Lengkap',
+                        validator: (v) =>
+                            v!.trim().isEmpty ? 'Nama wajib diisi' : null,
                       ),
-                      validator: (value) =>
-                          value!.trim().isEmpty ? 'Nama wajib diisi' : null,
                     ),
-                    const SizedBox(height: 16),
-
-                    if (!isEditMode)
-                      TextFormField(
-                        controller: _emailCtrl,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) =>
-                            value!.trim().isEmpty ? 'Email wajib diisi' : null,
-                      ),
-                    if (!isEditMode) const SizedBox(height: 16),
-
-                    TextFormField(
-                      controller: _passwordCtrl,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: isEditMode
-                            ? 'Password Baru (kosongkan jika tidak diubah)'
-                            : 'Password',
-                        border: const OutlineInputBorder(),
-                      ),
-                      validator: isEditMode
-                          ? null
-                          : (value) =>
-                                value!.isEmpty ? 'Password wajib diisi' : null,
-                    ),
-                    const SizedBox(height: 24),
-
                     if (!isEditMode) ...[
-                      DropdownButtonFormField<String>(
-                        value: selectedRole,
-                        decoration: const InputDecoration(
-                          labelText: 'Role',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'admin',
-                            child: Text('Admin'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'karyawan',
-                            child: Text('Karyawan'),
-                          ),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => selectedRole = value),
-                        validator: (value) =>
-                            value == null ? 'Pilih Role' : null,
-                      ),
                       const SizedBox(height: 16),
-
-                      DropdownButtonFormField<int>(
-                        value: selectedBagianId,
-                        decoration: const InputDecoration(
-                          labelText: 'Bagian',
-                          border: OutlineInputBorder(),
+                      _staggeredField(
+                        2,
+                        _buildTextField(
+                          controller: _emailCtrl,
+                          label: 'Email',
+                          keyboardType: TextInputType.emailAddress,
+                          validator: (v) =>
+                              v!.trim().isEmpty ? 'Email wajib diisi' : null,
                         ),
-                        items: bagianList
-                            .map(
-                              (b) => DropdownMenuItem<int>(
-                                value: b['id'] as int,
-                                child: Text(b['nama']),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (value) =>
-                            setState(() => selectedBagianId = value),
                       ),
                     ],
-
+                    const SizedBox(height: 16),
+                    _staggeredField(3, _buildPasswordField()),
+                    if (!isEditMode) ...[
+                      const SizedBox(height: 16),
+                      _staggeredField(4, _buildDropdownRole()),
+                      const SizedBox(height: 16),
+                      _staggeredField(5, _buildDropdownBagian()),
+                    ],
                     const SizedBox(height: 40),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: isLoading ? null : _saveProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF001F3F),
-                        ),
-                        child: Text(
-                          isEditMode ? 'Simpan Perubahan' : 'Tambah User',
-                          style: const TextStyle(fontSize: 18),
-                        ),
-                      ),
-                    ),
+                    _staggeredField(6, _buildSaveButton()),
                   ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _staggeredField(int index, Widget child) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: Duration(milliseconds: 300 + (index * 60)),
+      builder: (context, value, widget) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - value)),
+            child: widget,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+
+  Widget _buildAvatarPicker() {
+    // Bangun URL gambar profil menggunakan Apiimg
+    final String? imageUrl =
+        _currentPhotoPath != null && _currentPhotoPath!.isNotEmpty
+        ? (_currentPhotoPath!.startsWith('http')
+              ? _currentPhotoPath
+              : '${Apiimg.baseUrl}/images/profile/$_currentPhotoPath')
+        : null;
+
+    return GestureDetector(
+      onTap: _pickImage,
+      child: Hero(
+        tag: 'profileAvatar',
+        child: Stack(
+          alignment: Alignment.bottomRight,
+          children: [
+            CircleAvatar(
+              radius: 70,
+              backgroundColor: Colors.amber.shade100,
+              backgroundImage: _selectedImage != null
+                  ? FileImage(_selectedImage!)
+                  : (imageUrl != null ? NetworkImage(imageUrl) : null),
+              child: _selectedImage == null && imageUrl == null
+                  ? const Icon(Icons.person, size: 80, color: Colors.grey)
+                  : null,
+            ),
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: const Color(0xFFD97706),
+              child: const Icon(
+                Icons.camera_alt,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFFBBF24), width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 16,
+          horizontal: 16,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField() {
+    return TextFormField(
+      controller: _passwordCtrl,
+      obscureText: true,
+      decoration: InputDecoration(
+        labelText: isEditMode
+            ? 'Password Baru (kosongkan jika tidak diubah)'
+            : 'Password',
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFFBBF24), width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 16,
+          horizontal: 16,
+        ),
+      ),
+      validator: isEditMode
+          ? null
+          : (v) => v!.isEmpty ? 'Password wajib diisi' : null,
+    );
+  }
+
+  Widget _buildDropdownRole() {
+    return DropdownButtonFormField<String>(
+      value: selectedRole,
+      decoration: InputDecoration(
+        labelText: 'Role',
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFFBBF24), width: 2),
+        ),
+      ),
+      items: const [
+        DropdownMenuItem(value: 'admin', child: Text('Admin')),
+        DropdownMenuItem(value: 'karyawan', child: Text('Karyawan')),
+      ],
+      onChanged: (value) => setState(() => selectedRole = value),
+      validator: (value) => value == null ? 'Pilih Role' : null,
+    );
+  }
+
+  Widget _buildDropdownBagian() {
+    return DropdownButtonFormField<int>(
+      value: selectedBagianId,
+      decoration: InputDecoration(
+        labelText: 'Bagian',
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFFBBF24), width: 2),
+        ),
+      ),
+      items: bagianList
+          .map(
+            (b) => DropdownMenuItem<int>(
+              value: b['id'] as int,
+              child: Text(b['nama'] as String),
+            ),
+          )
+          .toList(),
+      onChanged: (value) => setState(() => selectedBagianId = value),
+    );
+  }
+
+  Widget _buildSaveButton() {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: isLoading
+          ? const Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFFD97706),
+                ),
+              ),
+            )
+          : SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: _saveProfile,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD97706),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 2,
+                ),
+                child: Text(
+                  isEditMode ? 'Simpan Perubahan' : 'Tambah User',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),

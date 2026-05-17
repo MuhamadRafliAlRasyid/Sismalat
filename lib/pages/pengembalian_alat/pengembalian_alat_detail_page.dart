@@ -1,27 +1,29 @@
-// lib/pages/pengambilan_alat/pengambilan_alat_detail_page.dart
+// lib/pages/pengembalian_alat/pengembalian_alat_detail_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../providers/pengambilan_provider.dart';
-import 'pengambilan_alat_form_page.dart';
+import '../../providers/pengembalian_provider.dart';
+import 'pengembalian_alat_form_page.dart';
 
-class PengambilanAlatDetailPage extends StatefulWidget {
+class PengembalianAlatDetailPage extends StatefulWidget {
   final String hashid;
-  const PengambilanAlatDetailPage({super.key, required this.hashid});
+  const PengembalianAlatDetailPage({Key? key, required this.hashid})
+    : super(key: key);
 
   @override
-  State<PengambilanAlatDetailPage> createState() =>
-      _PengambilanAlatDetailPageState();
+  State<PengembalianAlatDetailPage> createState() =>
+      _PengembalianAlatDetailPageState();
 }
 
-class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
+class _PengembalianAlatDetailPageState
+    extends State<PengembalianAlatDetailPage> {
   Map<String, dynamic>? _data;
 
   @override
   void initState() {
     super.initState();
-    final items = context.read<PengambilanProvider>().items;
-    _data = items.firstWhere(
-      (m) => m['hashid'] == widget.hashid,
+    final list = context.read<PengembalianProvider>().items;
+    _data = list.firstWhere(
+      (k) => k['hashid'] == widget.hashid,
       orElse: () => <String, dynamic>{},
     );
     if (_data!.isEmpty) _data = null;
@@ -29,35 +31,26 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final map = _data;
-    if (map == null) {
+    final data = _data;
+    if (data == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Detail Pengambilan')),
+        appBar: AppBar(title: const Text('Detail Pengembalian')),
         body: const Center(child: Text('Data tidak ditemukan')),
       );
     }
 
-    final namaAlat = map['alat']?['nama_alat'] ?? map['alat']?['nama'] ?? '-';
-    final gambarAlat = _resolveUrl(
-      map['alat']?['foto_thumb'] ?? map['alat']?['foto_url'],
-    );
-    final peminjam = map['nama_peminjam'] ?? map['user']?['name'] ?? '-';
-    final bagian = map['bagian']?['nama'] ?? '-';
-    final keperluan = map['keperluan'] ?? '-';
-    final jumlah = '${map['jumlah'] ?? 0} ${map['satuan'] ?? ''}';
-    final waktu = map['waktu_pengambilan'] ?? '-';
-    final status = map['status'] ?? map['status_label'] ?? '-';
-    final statusColor = status == 'dipinjam'
-        ? const Color(0xFFD97706)
-        : Colors.green;
-    final String? fotoPengambilanUrl = _resolveUrl(
-      map['foto_url'] ?? map['foto_thumb'],
-    );
+    final alatLabel = _alatLabel(data);
+    final peminjam = _peminjam(data);
+    final jumlah = '${data['jumlah'] ?? 0}';
+    final tanggal = data['tanggal_pengembalian'] ?? '-';
+    final keterangan = data['keterangan'] ?? '-';
+    final String? fotoUrl = data['foto_url'] ?? data['foto']?.toString();
+    final displayFotoUrl = _resolveUrl(fotoUrl);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFEF9E7),
       appBar: AppBar(
-        title: const Text('Bukti Pengambilan'),
+        title: const Text('Bukti Pengembalian'),
         backgroundColor: const Color(0xFFD97706),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -67,23 +60,18 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            onSelected: (value) async {
+            onSelected: (value) {
               if (value == 'edit') {
-                await Navigator.push(
+                Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (_) =>
-                        PengambilanAlatFormPage(hashid: widget.hashid),
+                        PengembalianAlatFormPage(hashid: widget.hashid),
                   ),
                 );
-                if (context.mounted) {
-                  context.read<PengambilanProvider>().fetchAll();
-                }
-              } else if (value == 'delete') {
-                _confirmDelete(context, widget.hashid);
               }
             },
-            itemBuilder: (_) => const [
+            itemBuilder: (BuildContext context) => const [
               PopupMenuItem(
                 value: 'edit',
                 child: Row(
@@ -91,16 +79,6 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
                     Icon(Icons.edit_outlined, size: 20),
                     SizedBox(width: 8),
                     Text('Edit'),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Hapus', style: TextStyle(color: Colors.red)),
                   ],
                 ),
               ),
@@ -113,28 +91,8 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (gambarAlat != null) ...[
-              _fadeInSection(
-                0,
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    gambarAlat,
-                    height: 150,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      height: 120,
-                      color: Colors.grey.shade200,
-                      child: const Icon(Icons.build, size: 48),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
             _fadeInSection(
-              1,
+              0,
               Card(
                 elevation: 2,
                 shape: RoundedRectangleBorder(
@@ -145,40 +103,38 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _infoRow('Alat', namaAlat, bold: true),
-                      const Divider(height: 20),
+                      _infoRow('Alat', alatLabel, bold: true),
+                      const Divider(height: 24),
                       _infoRow('Peminjam', peminjam),
-                      const Divider(height: 20),
-                      _infoRow('Bagian', bagian),
-                      const Divider(height: 20),
-                      _infoRow('Keperluan', keperluan),
-                      const Divider(height: 20),
-                      _infoRow('Jumlah', jumlah),
-                      const Divider(height: 20),
-                      _infoRow('Waktu Pengambilan', waktu),
-                      const Divider(height: 20),
-                      _infoRow('Status', status, valueColor: statusColor),
+                      const Divider(height: 24),
+                      _infoRow('Jumlah Dikembalikan', '$jumlah unit'),
+                      const Divider(height: 24),
+                      _infoRow('Tanggal Pengembalian', tanggal),
+                      if (keterangan.isNotEmpty && keterangan != '-') ...[
+                        const Divider(height: 24),
+                        _infoRow('Keterangan', keterangan),
+                      ],
                     ],
                   ),
                 ),
               ),
             ),
-            if (fotoPengambilanUrl != null) ...[
-              const SizedBox(height: 24),
-              _fadeInSection(
-                2,
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Foto Bukti Pengambilan',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade800,
-                      ),
+            const SizedBox(height: 24),
+            _fadeInSection(
+              1,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Foto Bukti',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
                     ),
-                    const SizedBox(height: 12),
+                  ),
+                  const SizedBox(height: 12),
+                  if (displayFotoUrl != null)
                     GestureDetector(
                       onTap: () {
                         showDialog(
@@ -188,7 +144,10 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
                             child: Stack(
                               children: [
                                 InteractiveViewer(
-                                  child: Image.network(fotoPengambilanUrl),
+                                  child: Image.network(
+                                    displayFotoUrl,
+                                    fit: BoxFit.contain,
+                                  ),
                                 ),
                                 Positioned(
                                   top: 8,
@@ -207,7 +166,7 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
                         );
                       },
                       child: Hero(
-                        tag: 'bukti_${widget.hashid}',
+                        tag: 'bukti_pengembalian_${widget.hashid}',
                         child: Container(
                           width: double.infinity,
                           height: 220,
@@ -215,7 +174,7 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: Colors.grey.shade300),
                             image: DecorationImage(
-                              image: NetworkImage(fotoPengambilanUrl),
+                              image: NetworkImage(displayFotoUrl),
                               fit: BoxFit.cover,
                             ),
                           ),
@@ -247,14 +206,38 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
                           ),
                         ),
                       ),
+                    )
+                  else
+                    Container(
+                      width: double.infinity,
+                      height: 180,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.image_not_supported,
+                            size: 48,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Tidak ada foto bukti',
+                            style: TextStyle(color: Colors.grey.shade500),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                ],
               ),
-            ],
+            ),
             const SizedBox(height: 24),
             _fadeInSection(
-              3,
+              2,
               SizedBox(
                 width: double.infinity,
                 height: 48,
@@ -264,12 +247,12 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
                       context,
                       MaterialPageRoute(
                         builder: (_) =>
-                            PengambilanAlatFormPage(hashid: widget.hashid),
+                            PengembalianAlatFormPage(hashid: widget.hashid),
                       ),
                     );
                   },
                   icon: const Icon(Icons.edit),
-                  label: const Text('Edit Pengambilan'),
+                  label: const Text('Edit Pengembalian'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFFD97706),
                     side: const BorderSide(color: Color(0xFFD97706)),
@@ -303,12 +286,7 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
     );
   }
 
-  Widget _infoRow(
-    String label,
-    String value, {
-    Color? valueColor,
-    bool bold = false,
-  }) {
+  Widget _infoRow(String label, String value, {bool bold = false}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -329,7 +307,7 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
             style: TextStyle(
               fontSize: 15,
               fontWeight: bold ? FontWeight.w700 : FontWeight.w600,
-              color: valueColor ?? const Color(0xFF1E293B),
+              color: const Color(0xFF1E293B),
             ),
           ),
         ),
@@ -337,29 +315,24 @@ class _PengambilanAlatDetailPageState extends State<PengambilanAlatDetailPage> {
     );
   }
 
-  void _confirmDelete(BuildContext context, String hashid) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Hapus Pengambilan?'),
-        content: const Text('Data ini akan dihapus permanen.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await context.read<PengambilanProvider>().delete(hashid);
-              if (context.mounted) Navigator.pop(context);
-            },
-            child: const Text('Hapus', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+  String _alatLabel(Map<String, dynamic> item) {
+    final pengambilan = item['pengambilan'];
+    if (pengambilan == null) return '-';
+    final alat = pengambilan['alat'];
+    if (alat == null) return '-';
+    return alat['nama_alat'] ?? alat['nama'] ?? '-';
+  }
+
+  String _peminjam(Map<String, dynamic> item) {
+    if (item['nama_peminjam'] != null &&
+        item['nama_peminjam'].toString().isNotEmpty) {
+      return item['nama_peminjam'].toString();
+    }
+    final user = item['user'];
+    if (user is Map && user['name'] != null) {
+      return user['name'].toString();
+    }
+    return '-';
   }
 
   String? _resolveUrl(String? path) {

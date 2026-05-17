@@ -26,6 +26,9 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- ✅ Izin Kamera untuk pemindai QR -->
+	<key>NSCameraUsageDescription</key>
+	<string>Kamera digunakan untuk memindai QR Code alat.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

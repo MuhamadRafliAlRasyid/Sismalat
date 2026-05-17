@@ -1,24 +1,29 @@
-import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class ApiBase {
   final String baseUrl;
-  final String token;
+  final String?
+  token; // ← token opsional, jika tidak ada kirim tanpa Authorization
 
-  ApiBase({required this.baseUrl, required this.token});
+  ApiBase({required this.baseUrl, this.token});
 
-  Map<String, String> get headers => {
-    'Authorization': 'Bearer $token',
-    'Accept': 'application/json',
-  };
+  Map<String, String> get headers {
+    final h = <String, String>{'Accept': 'application/json'};
+    if (token != null) {
+      h['Authorization'] = 'Bearer $token';
+    }
+    return h;
+  }
 
-  Map<String, String> get multipartHeaders => {
-    'Authorization': 'Bearer $token',
-    'Accept': 'application/json',
-    // 'Content-Type': 'multipart/form-data', // otomatis ditambahkan oleh http.MultipartRequest
-  };
+  Map<String, String> get multipartHeaders {
+    final h = <String, String>{'Accept': 'application/json'};
+    if (token != null) {
+      h['Authorization'] = 'Bearer $token';
+    }
+    return h;
+  }
 
-  // Utility: decode response
   dynamic _handleResponse(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return json.decode(response.body);
@@ -98,9 +103,11 @@ class ApiBase {
     Map<String, String>? files,
   }) async {
     final uri = Uri.parse('$baseUrl/$endpoint');
-    final request = http.MultipartRequest('PUT', uri)
-      ..headers.addAll(multipartHeaders)
-      ..fields.addAll(fields);
+    final request =
+        http.MultipartRequest('POST', uri) // ← pakai POST
+          ..headers.addAll(multipartHeaders)
+          ..fields.addAll(fields)
+          ..fields['_method'] = 'PUT'; // ← Laravel method spoofing
 
     if (files != null) {
       for (final entry in files.entries) {

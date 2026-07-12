@@ -1,3 +1,4 @@
+// lib/services/alat_service.dart
 import 'api_base.dart';
 
 class AlatService {
@@ -10,19 +11,28 @@ class AlatService {
     String? search,
     String? kategoriId,
     int page = 1,
-    int perPage = 10,
+    int perPage = 12,
   }) async {
     final params = <String, String>{
       'page': page.toString(),
       'per_page': perPage.toString(),
     };
-    if (search != null) params['search'] = search;
+    if (search != null && search.isNotEmpty) params['search'] = search;
     if (kategoriId != null) params['kategori_id'] = kategoriId;
-    return await _api.get('alat', queryParams: params);
+
+    return await _api.get('alats', queryParams: params);
   }
 
   Future<Map<String, dynamic>> getAlat(String hashid) async {
-    return await _api.get('alat/$hashid');
+    return await _api.get('alats/$hashid');
+  }
+
+  Future<Map<String, dynamic>> getCreateData() async {
+    return await _api.get('alats/create');
+  }
+
+  Future<Map<String, dynamic>> getEditData(String hashid) async {
+    return await _api.get('alats/$hashid/edit');
   }
 
   Future<Map<String, dynamic>> createAlat({
@@ -31,12 +41,12 @@ class AlatService {
   }) async {
     if (fotoPath != null) {
       return await _api.multipartPost(
-        'alat',
+        'alats',
         fields: fields,
         files: {'foto': fotoPath},
       );
     }
-    return await _api.post('alat', body: fields);
+    return await _api.post('alats', body: fields);
   }
 
   Future<Map<String, dynamic>> updateAlat(
@@ -44,7 +54,7 @@ class AlatService {
     required Map<String, String> fields,
     String? fotoPath,
   }) async {
-    final endpoint = 'alat/$hashid';
+    final endpoint = 'alats/$hashid';
     if (fotoPath != null) {
       return await _api.multipartPut(
         endpoint,
@@ -56,40 +66,35 @@ class AlatService {
   }
 
   Future<Map<String, dynamic>> deleteAlat(String hashid) async {
-    return await _api.delete('alat/$hashid');
+    return await _api.delete('alats/$hashid');
   }
 
-  Future<Map<String, dynamic>> getTrashed() async {
-    return await _api.get('alat/trashed');
+  Future<Map<String, dynamic>> getTrashed({int page = 1}) async {
+    final params = {'page': page.toString()};
+    return await _api.get('alats/trashed', queryParams: params);
   }
 
   Future<Map<String, dynamic>> restoreAlat(String hashid) async {
-    return await _api.post('alat/$hashid/restore');
+    return await _api.post('alats/$hashid/restore');
   }
 
   Future<Map<String, dynamic>> forceDeleteAlat(String hashid) async {
-    return await _api.delete('alat/$hashid/force-delete');
+    return await _api.delete('alats/$hashid/force-delete');
   }
 
-  Future<Map<String, dynamic>> getExpiredAlerts() async {
-    return await _api.get('alat/expired-alerts');
+  Future<Map<String, dynamic>> getRiwayat(String hashid) async {
+    return await _api.get('alats/$hashid/riwayat');
   }
 
-  Future<Map<String, dynamic>> getKalibrasiByAlat(
-    String alatHashid, {
+  Future<Map<String, dynamic>> getDaftarRiwayat({
     String? search,
-    int perPage = 10,
+    String? status,
+    int page = 1,
   }) async {
-    final params = <String, String>{};
-    if (search != null) params['search'] = search;
-    params['per_page'] = perPage.toString();
-    return await _api.get('alat/$alatHashid/kalibrasi', queryParams: params);
-  }
+    final params = <String, String>{'page': page.toString()};
+    if (search != null && search.isNotEmpty) params['search'] = search;
+    if (status != null) params['status'] = status;
 
-  Future<Map<String, dynamic>> createKalibrasi(
-    String alatHashid,
-    Map<String, dynamic> data,
-  ) async {
-    return await _api.post('alat/$alatHashid/kalibrasi', body: data);
+    return await _api.get('alats/daftar-riwayat', queryParams: params);
   }
 }

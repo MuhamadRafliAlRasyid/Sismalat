@@ -1,6 +1,6 @@
-// lib/pages/login_page.dart
 import 'package:flutter/material.dart';
-import '../../services/auth_service.dart'; // sesuaikan path
+import '../../services/auth_service.dart';
+import '../dashboard_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -9,17 +9,43 @@ class LoginPage extends StatefulWidget {
   State<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends State<LoginPage>
+    with SingleTickerProviderStateMixin {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _obscurePassword = true;
   final _formKey = GlobalKey<FormState>();
+
+  bool _obscurePassword = true;
   bool _isLoading = false;
+  bool _isLoadingGoogle = false;
+
+  late AnimationController _fadeController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeIn));
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOut));
+    _fadeController.forward();
+  }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _fadeController.dispose();
     super.dispose();
   }
 
@@ -28,37 +54,79 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() => _isLoading = true);
-      final result = await AuthService.login(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-      setState(() => _isLoading = false);
+    if (!_formKey.currentState!.validate()) return;
 
-      if (result['status'] == true) {
-        Navigator.pushReplacementNamed(
-          context,
-          '/dashboard',
-        ); // ganti rute sesuai dashboard
-      } else {
+    setState(() => _isLoading = true);
+
+    final result = await AuthService.login(
+      email: _emailController.text.trim(),
+      password: _passwordController.text,
+    );
+
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (result['status'] == true) {
+      // ✅ Cek apakah ada QR flow (alat_id)
+      if (result['should_open_form'] == true && result['alat_id'] != null) {
+        // Simpan alat_id untuk digunakan di form pengambilan
+        await AuthService.saveTempAlat(result['alat_id']);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(result['message'] ?? 'Login gagal'),
-            backgroundColor: Colors.red,
+            content: Text(result['message'] ?? 'Login berhasil'),
+            backgroundColor: Colors.green,
           ),
         );
+
+        // Navigate ke form pengambilan alat
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/pengambilan_alat/form',
+          (route) => false,
+          arguments: {'alatHashid': result['alat_id']},
+        );
+      } else {
+        // Normal login → Dashboard
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Login berhasil'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => DashboardPage()),
+          (route) => false,
+        );
       }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Login gagal'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   Future<void> _handleGoogleLogin() async {
-    setState(() => _isLoading = true);
+    setState(() => _isLoadingGoogle = true);
+
     final result = await AuthService.loginWithGoogle();
-    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+    setState(() => _isLoadingGoogle = false);
 
     if (result['status'] == true) {
-      Navigator.pushReplacementNamed(context, '/dashboard');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Login Google berhasil'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => DashboardPage()),
+        (route) => false,
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -72,7 +140,16 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(child: SingleChildScrollView(child: _buildMainContent())),
+      backgroundColor: const Color(0xFFFEF9E7),
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: SlideTransition(
+            position: _slideAnimation,
+            child: SingleChildScrollView(child: _buildMainContent()),
+          ),
+        ),
+      ),
     );
   }
 
@@ -89,7 +166,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // ========== LAYOUT WIDE ==========
+  // ========== LAYOUT WIDE (Tablet/Desktop) ==========
   Widget _buildWideLayout() {
     return Container(
       decoration: BoxDecoration(
@@ -236,7 +313,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 20),
               const Text(
-                'Kelola Inventaris Alat Ukur & Sparepart',
+                'Kelola Inventaris Alat Ukur',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -254,7 +331,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Aplikasi modern untuk mencatat pengambilan, pengembalian, purchase request, serta memantau stok secara real-time dengan dukungan scan QR Code.',
+                'Aplikasi modern untuk mencatat pengambilan, pengembalian, kalibrasi, serta memantau stok alat secara real-time dengan dukungan scan QR Code.',
                 style: TextStyle(
                   fontSize: 13,
                   color: Color(0xFF4B5563),
@@ -323,7 +400,8 @@ class _LoginPageState extends State<LoginPage> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            // Email field
+
+            // ✅ Email field
             TextFormField(
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
@@ -361,7 +439,8 @@ class _LoginPageState extends State<LoginPage> {
               },
             ),
             const SizedBox(height: 16),
-            // Password field
+
+            // ✅ Password field
             TextFormField(
               controller: _passwordController,
               obscureText: _obscurePassword,
@@ -406,7 +485,8 @@ class _LoginPageState extends State<LoginPage> {
               },
             ),
             const SizedBox(height: 24),
-            // Tombol Login
+
+            // ✅ Tombol Login Email
             SizedBox(
               height: 52,
               child: ElevatedButton(
@@ -445,12 +525,33 @@ class _LoginPageState extends State<LoginPage> {
                       ),
               ),
             ),
-            const SizedBox(height: 20),
-            // Google Login
+            const SizedBox(height: 16),
+
+            // ✅ Divider "ATAU"
+            Row(
+              children: [
+                Expanded(child: Divider(color: Colors.grey.shade300)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'ATAU',
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Expanded(child: Divider(color: Colors.grey.shade300)),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // ✅ Tombol Login Google
             SizedBox(
               height: 52,
               child: OutlinedButton(
-                onPressed: _isLoading ? null : _handleGoogleLogin,
+                onPressed: _isLoadingGoogle ? null : _handleGoogleLogin,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF374151),
                   side: BorderSide(color: Colors.grey.shade200),
@@ -459,26 +560,32 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   backgroundColor: Colors.white,
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.network(
-                      'https://www.google.com/favicon.ico',
-                      width: 20,
-                      height: 20,
-                      errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.g_mobiledata, size: 24),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'Masuk dengan Google',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+                child: _isLoadingGoogle
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.network(
+                            'https://www.google.com/favicon.ico',
+                            width: 20,
+                            height: 20,
+                            errorBuilder: (_, __, ___) =>
+                                const Icon(Icons.g_mobiledata, size: 24),
+                          ),
+                          const SizedBox(width: 10),
+                          const Text(
+                            'Masuk dengan Google',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             ),
             const SizedBox(height: 24),

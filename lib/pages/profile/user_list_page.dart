@@ -1,8 +1,6 @@
-// lib/pages/user/user_list_page.dart
 import 'package:flutter/material.dart';
+import '../../config/api.dart';
 import '../../services/auth_service.dart';
-import '../../config/api.dart'; // ✅ import Apiimg
-import 'edit_profile_page.dart';
 
 class UserListPage extends StatefulWidget {
   const UserListPage({super.key});
@@ -11,92 +9,94 @@ class UserListPage extends StatefulWidget {
   State<UserListPage> createState() => _UserListPageState();
 }
 
-class _UserListPageState extends State<UserListPage>
-    with SingleTickerProviderStateMixin {
-  List<dynamic> users = [];
-  bool isLoading = true;
-  String? searchQuery;
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
+class _UserListPageState extends State<UserListPage> {
+  List<dynamic> _users = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-    _pulseController.repeat(reverse: true);
     _loadUsers();
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadUsers({String? search}) async {
-    setState(() => isLoading = true);
-    final result = await AuthService.getAllUsers(search: search);
-    if (result['status'] == true) {
-      setState(() => users = result['data'] ?? []);
-    } else {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(result['message'] ?? 'Gagal memuat data user'),
-            backgroundColor: Colors.red,
-          ),
-        );
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      print('🔄 [UserListPage] Loading users...');
+
+      final result = await AuthService.getAllUsers(search: search);
+
+      print('📦 [UserListPage] Response keys: ${result.keys.toList()}');
+      print('📦 [UserListPage] Success: ${result['success']}');
+
+      if (result['success'] == true) {
+        final data = result['data'];
+
+        if (data is List) {
+          setState(() {
+            _users = data;
+          });
+          print('✅ [UserListPage] Total users loaded: ${_users.length}');
+        } else {
+          throw Exception('Format data tidak valid: ${data.runtimeType}');
+        }
+      } else {
+        throw Exception(result['message'] ?? 'Gagal memuat data user');
+      }
+    } catch (e) {
+      print('❌ [UserListPage] Error: $e');
+      setState(() {
+        _errorMessage = e.toString();
+      });
     }
-    setState(() => isLoading = false);
+
+    setState(() => _isLoading = false);
   }
 
-  void _onSearch(String query) {
-    setState(() => searchQuery = query);
-    _loadUsers(search: query);
-  }
-
-  Future<void> _deleteUser(String hashid, String name) async {
+  Future<void> _deleteUser(String hashid, String userName) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Hapus User?'),
-        content: Text('Yakin ingin menghapus user "$name"?'),
+        content: Text('Yakin ingin menghapus user "$userName"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('Batal'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Hapus'),
+            child: const Text('Hapus', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
     );
+
     if (confirm != true) return;
+
     final result = await AuthService.deleteUser(hashid);
-    if (result['status'] == true) {
+
+    if (result['success'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('User berhasil dihapus'),
           backgroundColor: Colors.green,
         ),
       );
-      _loadUsers(search: searchQuery);
+      _loadUsers();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -112,21 +112,18 @@ class _UserListPageState extends State<UserListPage>
     return Scaffold(
       backgroundColor: const Color(0xFFFEF9E7),
       appBar: AppBar(
-        title: const Text('Daftar User'),
+        title: const Text(
+          'Daftar User',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
         backgroundColor: const Color(0xFFD97706),
         foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'Tambah User',
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const EditProfilePage()),
-              );
-              if (result == true) _loadUsers(search: searchQuery);
-            },
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _loadUsers(search: _searchCtrl.text),
           ),
         ],
       ),
@@ -134,349 +131,468 @@ class _UserListPageState extends State<UserListPage>
         children: [
           _buildSearchBar(),
           Expanded(
-            child: isLoading
+            child: _isLoading
                 ? _buildShimmerList()
-                : users.isEmpty
-                ? const Center(child: Text('Belum ada data user'))
+                : _errorMessage != null
+                ? _buildError()
+                : _users.isEmpty
+                ? _buildEmpty()
                 : RefreshIndicator(
                     color: const Color(0xFFD97706),
-                    onRefresh: () => _loadUsers(search: searchQuery),
+                    onRefresh: () => _loadUsers(),
                     child: ListView.builder(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      itemCount: users.length,
-                      itemBuilder: (context, index) => _StaggeredUserCard(
-                        user: users[index],
-                        index: index,
-                        onEdit: () async {
-                          final result = await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  EditProfilePage(userData: users[index]),
-                            ),
-                          );
-                          if (result == true) _loadUsers(search: searchQuery);
-                        },
-                        onDelete: () => _deleteUser(
-                          users[index]['hashid'] ?? '',
-                          users[index]['name'] ?? '',
-                        ),
-                      ),
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _users.length,
+                      itemBuilder: (context, index) {
+                        final user = _users[index];
+                        return _UserCard(
+                          user: user,
+                          onDelete: () => _deleteUser(
+                            user['hashid']?.toString() ?? '',
+                            user['name'] ?? 'User',
+                          ),
+                          onEdit: () async {
+                            final result = await Navigator.pushNamed(
+                              context,
+                              '/user/form',
+                              arguments: user['hashid']?.toString(),
+                            );
+                            if (result == true) _loadUsers();
+                          },
+                        );
+                      },
                     ),
                   ),
           ),
         ],
       ),
-      floatingActionButton: AnimatedBuilder(
-        animation: _pulseAnimation,
-        builder: (context, child) =>
-            Transform.scale(scale: _pulseAnimation.value, child: child),
-        child: FloatingActionButton(
-          backgroundColor: const Color(0xFFD97706),
-          foregroundColor: Colors.white,
-          elevation: 4,
-          onPressed: () async {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const EditProfilePage()),
-            );
-            if (result == true) _loadUsers(search: searchQuery);
-          },
-          child: const Icon(Icons.add),
-        ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final result = await Navigator.pushNamed(context, '/user/form');
+          if (result == true) _loadUsers();
+        },
+        backgroundColor: const Color(0xFFD97706),
+        icon: const Icon(Icons.person_add),
+        label: const Text('Tambah User'),
       ),
     );
   }
 
   Widget _buildSearchBar() {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.amber.withOpacity(0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: TextField(
-        onChanged: _onSearch,
+        controller: _searchCtrl,
         decoration: InputDecoration(
-          hintText: 'Cari nama, email, atau bagian...',
+          hintText: 'Cari user...',
+          hintStyle: TextStyle(color: Colors.grey.shade400),
           prefixIcon: const Icon(Icons.search, color: Color(0xFFD97706)),
-          filled: true,
-          fillColor: const Color(0xFFF5F5F5),
+          suffixIcon: _searchCtrl.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, color: Colors.grey),
+                  onPressed: () {
+                    _searchCtrl.clear();
+                    _loadUsers();
+                  },
+                )
+              : null,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
             borderSide: BorderSide.none,
           ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(16),
-            borderSide: const BorderSide(color: Color(0xFFFBBF24), width: 2),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 14,
+            horizontal: 16,
           ),
         ),
+        onSubmitted: (v) => _loadUsers(search: v),
       ),
     );
   }
 
   Widget _buildShimmerList() {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(12),
       itemCount: 5,
-      itemBuilder: (context, index) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: _ShimmerCard(),
-      ),
-    );
-  }
-}
-
-class _StaggeredUserCard extends StatefulWidget {
-  final dynamic user;
-  final int index;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  const _StaggeredUserCard({
-    required this.user,
-    required this.index,
-    required this.onEdit,
-    required this.onDelete,
-  });
-
-  @override
-  State<_StaggeredUserCard> createState() => _StaggeredUserCardState();
-}
-
-class _StaggeredUserCardState extends State<_StaggeredUserCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _animController;
-  late Animation<double> _scaleAnimation;
-  late Animation<Offset> _slideAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _scaleAnimation = Tween<double>(begin: 0.9, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutBack),
-    );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.2),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
-    Future.delayed(Duration(milliseconds: 80 * widget.index), () {
-      if (mounted) _animController.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _animController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final user = widget.user;
-    final role = user['role'] ?? '';
-    final isAdmin = role == 'admin';
-
-    // Ambil path foto
-    final photoPath = user['profile_photo_path'] ?? user['profile_photo_url'];
-    final imageUrl = photoPath != null && photoPath.toString().isNotEmpty
-        ? (photoPath.toString().startsWith('http')
-              ? photoPath.toString()
-              : '${Apiimg.baseUrl}/images/profile/$photoPath')
-        : null;
-
-    return AnimatedBuilder(
-      animation: _animController,
-      builder: (context, child) => SlideTransition(
-        position: _slideAnimation,
-        child: Transform.scale(scale: _scaleAnimation.value, child: child),
-      ),
-      child: Card(
+      itemBuilder: (context, index) => Card(
         margin: const EdgeInsets.only(bottom: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        elevation: 1,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: widget.onEdit,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: isAdmin
-                      ? const Color(0xFFD97706)
-                      : const Color(0xFFFBBF24),
-                  backgroundImage: imageUrl != null
-                      ? NetworkImage(imageUrl)
-                      : null,
-                  child: imageUrl == null
-                      ? Text(
-                          (user['name'] ?? 'U').substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 22,
-                          ),
-                        )
-                      : null,
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        user['name'] ?? '-',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        user['email'] ?? '-',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.amber.shade200),
-                            ),
-                            child: Text(
-                              user['bagian']?['nama'] ??
-                                  user['bagian']?['nama_bagian'] ??
-                                  '-',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.amber.shade800,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isAdmin
-                                  ? const Color(0xFFFEF3C7)
-                                  : Colors.blue.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              role.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isAdmin
-                                    ? const Color(0xFFD97706)
-                                    : Colors.blue.shade700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                    color: Color(0xFFD97706),
-                  ),
-                  tooltip: 'Edit',
-                  onPressed: widget.onEdit,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  tooltip: 'Hapus',
-                  onPressed: widget.onDelete,
-                ),
-              ],
+        child: ListTile(
+          leading: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(24),
             ),
+          ),
+          title: Container(
+            height: 16,
+            width: double.infinity,
+            color: Colors.grey.shade200,
+          ),
+          subtitle: Container(
+            height: 12,
+            width: 120,
+            color: Colors.grey.shade200,
           ),
         ),
       ),
     );
   }
-}
 
-class _ShimmerCard extends StatefulWidget {
-  @override
-  State<_ShimmerCard> createState() => _ShimmerCardState();
-}
-
-class _ShimmerCardState extends State<_ShimmerCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<Color?> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
+  Widget _buildError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
+            const SizedBox(height: 12),
+            Text(
+              _errorMessage ?? 'Gagal memuat data',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.redAccent),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => _loadUsers(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Coba Lagi'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFD97706),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-    _animation = ColorTween(
-      begin: Colors.grey.shade200,
-      end: Colors.grey.shade100,
-    ).animate(_controller);
-    _controller.repeat(reverse: true);
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  Widget _buildEmpty() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.people_outline, size: 72, color: Colors.amber.shade200),
+          const SizedBox(height: 12),
+          Text(
+            'Belum ada user',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ================== USER CARD ==================
+class _UserCard extends StatelessWidget {
+  final Map<String, dynamic> user;
+  final VoidCallback onDelete;
+  final VoidCallback onEdit;
+
+  const _UserCard({
+    required this.user,
+    required this.onDelete,
+    required this.onEdit,
+  });
+
+  /// ✅ Helper untuk mendapatkan URL foto profile yang benar
+  /// Prioritas:
+  /// 1. URL eksternal (Google, ui-avatars) → return langsung
+  /// 2. Path relatif → gabungkan dengan /images/profile/
+  /// 3. URL localhost yang rusak → extract URL asli
+  String? _getPhotoUrl(dynamic photoPath) {
+    if (photoPath == null) return null;
+
+    final photoStr = photoPath.toString().trim();
+    if (photoStr.isEmpty) return null;
+
+    // 1. ✅ Jika URL eksternal (Google, ui-avatars, dll), return langsung
+    if (photoStr.startsWith('https://') &&
+        (photoStr.contains('googleusercontent') ||
+            photoStr.contains('ui-avatars') ||
+            photoStr.contains('google.com') ||
+            photoStr.contains('lh3.') ||
+            photoStr.contains('gstatic'))) {
+      return photoStr;
+    }
+
+    // 2. ✅ Jika URL localhost yang rusak (prefix ganda)
+    // Contoh: http://127.0.0.1:8000/storage/https://lh3.googleusercontent.com/...
+    if (photoStr.contains('/storage/https://') ||
+        photoStr.contains('/storage/http://')) {
+      // Extract URL asli setelah /storage/
+      final match = RegExp(r'/storage/(https?://.+)$').firstMatch(photoStr);
+      if (match != null) {
+        return match.group(1);
+      }
+    }
+
+    // 3. ✅ Jika sudah URL localhost/127.0.0.1 yang valid, extract path-nya
+    if (photoStr.startsWith('http://127.0.0.1') ||
+        photoStr.startsWith('http://localhost')) {
+      // Extract bagian setelah /images/profile/ atau /storage/
+      if (photoStr.contains('/images/profile/')) {
+        final afterPath = photoStr.split('/images/profile/').last;
+        return '${Apiimg.baseUrl}/images/profile/$afterPath';
+      }
+      if (photoStr.contains('/storage/')) {
+        final afterPath = photoStr.split('/storage/').last;
+        // Jika path yang diekstrak adalah URL eksternal, return langsung
+        if (afterPath.startsWith('http://') ||
+            afterPath.startsWith('https://')) {
+          return afterPath;
+        }
+        return '${Apiimg.baseUrl}/storage/$afterPath';
+      }
+    }
+
+    // 4. ✅ Jika sudah URL http/https yang valid, return langsung
+    if (photoStr.startsWith('http://') || photoStr.startsWith('https://')) {
+      return photoStr;
+    }
+
+    // 5. ✅ Jika path relatif, gabungkan dengan /images/profile/
+    // Karena foto profile disimpan di public/images/profile/
+    String cleanPath = photoStr;
+
+    // Hapus prefix 'images/profile/' atau 'storage/' jika ada
+    if (cleanPath.startsWith('images/profile/')) {
+      cleanPath = cleanPath.substring('images/profile/'.length);
+    } else if (cleanPath.startsWith('storage/')) {
+      cleanPath = cleanPath.substring('storage/'.length);
+    }
+
+    return '${Apiimg.baseUrl}/images/profile/$cleanPath';
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) => Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    final name = user['name'] ?? 'Tanpa Nama';
+    final email = user['email'] ?? '-';
+    final role = user['role'] ?? 'karyawan';
+    final bagian = user['bagian']?['nama'] ?? '-';
+
+    final photoPath = user['profile_photo_url'] ?? user['profile_photo_path'];
+    final imageUrl = _getPhotoUrl(photoPath);
+
+    // Debug
+    print('🖼️ [UserCard] name=$name');
+    print('   📥 photoPath: $photoPath');
+    print('   🖼️ imageUrl: $imageUrl');
+
+    Color roleColor;
+    switch (role.toString().toLowerCase()) {
+      case 'super':
+        roleColor = Colors.purple;
+        break;
+      case 'admin':
+        roleColor = Colors.blue;
+        break;
+      default:
+        roleColor = Colors.green;
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onEdit,
+        borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              CircleAvatar(radius: 26, backgroundColor: _animation.value),
-              const SizedBox(width: 16),
+              _buildAvatar(imageUrl, name),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      height: 14,
-                      width: double.infinity,
-                      color: _animation.value,
+                    Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E293B),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Container(height: 10, width: 150, color: _animation.value),
+                    const SizedBox(height: 2),
+                    Text(
+                      email,
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: roleColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            role.toString().toUpperCase(),
+                            style: TextStyle(
+                              color: roleColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (bagian != '-')
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              bagian,
+                              style: const TextStyle(
+                                color: Color(0xFFD97706),
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ],
                 ),
+              ),
+              PopupMenuButton<String>(
+                onSelected: (value) {
+                  if (value == 'edit') onEdit();
+                  if (value == 'delete') onDelete();
+                },
+                itemBuilder: (ctx) => [
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit, size: 20, color: Color(0xFFD97706)),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete, size: 20, color: Colors.red),
+                        SizedBox(width: 8),
+                        Text('Hapus', style: TextStyle(color: Colors.red)),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar(String? imageUrl, String name) {
+    // Jika tidak ada URL, tampilkan inisial
+    if (imageUrl == null || imageUrl.isEmpty) {
+      return CircleAvatar(
+        radius: 28,
+        backgroundColor: Colors.amber.shade100,
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFFD97706),
+          ),
+        ),
+      );
+    }
+
+    // ✅ Tampilkan foto dengan error handling
+    return ClipOval(
+      child: Image.network(
+        imageUrl,
+        width: 56,
+        height: 56,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) {
+          print('❌ [Avatar] Gagal load: $imageUrl');
+          return Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.amber.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                name.isNotEmpty ? name[0].toUpperCase() : '?',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFD97706),
+                ),
+              ),
+            ),
+          );
+        },
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.amber.shade100,
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD97706)),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

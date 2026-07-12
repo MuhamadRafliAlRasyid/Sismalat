@@ -14,13 +14,25 @@ class PengambilanAlatService {
   Future<Map<String, dynamic>> getPengambilan({
     String? search,
     String? alatHashid,
+    int page = 1,
     int perPage = 10,
   }) async {
-    final params = <String, String>{};
-    if (search != null) params['search'] = search;
+    final params = <String, String>{
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+    if (search != null && search.isNotEmpty) params['search'] = search;
     if (alatHashid != null) params['alat_id'] = alatHashid;
-    params['per_page'] = perPage.toString();
+
     return await _api.get('pengambilan_alat', queryParams: params);
+  }
+
+  Future<Map<String, dynamic>> getCreateData() async {
+    return await _api.get('pengambilan_alat/create');
+  }
+
+  Future<Map<String, dynamic>> getEditData(String hashid) async {
+    return await _api.get('pengambilan_alat/$hashid/edit');
   }
 
   Future<Map<String, dynamic>> create({
@@ -30,6 +42,7 @@ class PengambilanAlatService {
     String? namaPeminjam,
     required int jumlah,
     required String satuan,
+    required int lamaPinjam,
     required String keperluan,
     required String waktuPengambilan,
     String? fotoPath,
@@ -40,10 +53,13 @@ class PengambilanAlatService {
       'alat_id': alatHashid,
       'jumlah': jumlah.toString(),
       'satuan': satuan,
+      'lama_pinjam': lamaPinjam.toString(),
       'keperluan': keperluan,
       'waktu_pengambilan': waktuPengambilan,
     };
-    if (namaPeminjam != null) fields['nama_peminjam'] = namaPeminjam;
+    if (namaPeminjam != null && namaPeminjam.isNotEmpty) {
+      fields['nama_peminjam'] = namaPeminjam;
+    }
 
     if (fotoPath != null) {
       return await _api.multipartPost(
@@ -62,6 +78,7 @@ class PengambilanAlatService {
     String? namaPeminjam,
     required int jumlah,
     required String satuan,
+    required int lamaPinjam,
     required String keperluan,
     required String waktuPengambilan,
     String? fotoPath,
@@ -71,10 +88,13 @@ class PengambilanAlatService {
       'alat_id': alatHashid,
       'jumlah': jumlah.toString(),
       'satuan': satuan,
+      'lama_pinjam': lamaPinjam.toString(),
       'keperluan': keperluan,
       'waktu_pengambilan': waktuPengambilan,
     };
-    if (namaPeminjam != null) fields['nama_peminjam'] = namaPeminjam;
+    if (namaPeminjam != null && namaPeminjam.isNotEmpty) {
+      fields['nama_peminjam'] = namaPeminjam;
+    }
 
     final endpoint = 'pengambilan_alat/$hashid';
     if (fotoPath != null) {

@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 class AlatFormPage extends StatefulWidget {
   final String? hashid;
+
   const AlatFormPage({Key? key, this.hashid}) : super(key: key);
 
   @override
@@ -30,42 +31,80 @@ class _AlatFormPageState extends State<AlatFormPage>
   final _imagePicker = ImagePicker();
   XFile? _imageFile;
   bool _saving = false;
-  late AlatProvider _provider;
+  bool _loadingData = false;
 
-  // Animasi stagger untuk field
-  late AnimationController _fieldAnimController;
-  late Animation<double> _fieldFadeAnimation;
+  String? _selectedKategoriId;
+  List<Map<String, dynamic>> _kategoris = [];
 
   @override
   void initState() {
     super.initState();
-    _provider = context.read<AlatProvider>();
-    _fieldAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 500),
-    );
-    _fieldFadeAnimation = CurvedAnimation(
-      parent: _fieldAnimController,
-      curve: Curves.easeIn,
-    );
-    _fieldAnimController.forward();
+    _loadInitialData();
+  }
 
-    if (widget.hashid != null) {
-      final existing = _provider.selectedAlat;
-      if (existing != null) {
-        _namaCtrl.text = existing.namaAlat;
-        _kelasCtrl.text = existing.kelas ?? '';
-        _merkCtrl.text = existing.merk;
-        _tipeCtrl.text = existing.tipe ?? '';
-        _noSeriCtrl.text = existing.noSeri ?? '';
-        _noIdentitasCtrl.text = existing.noIdentitas ?? '';
-        _kapasitasCtrl.text = existing.kapasitas ?? '';
-        _dayaBacaCtrl.text = existing.dayaBaca ?? '';
-        _jumlahCtrl.text = existing.jumlah.toString();
-        _noSertifikatCtrl.text = existing.noSertifikat ?? '';
-        _masaBerlakuCtrl.text = existing.masaBerlaku ?? '';
+  Future<void> _loadInitialData() async {
+    setState(() => _loadingData = true);
+
+    final provider = context.read<AlatProvider>();
+
+    // ✅ Load kategoris dari provider (jika sudah ada)
+    if (provider.kategoris.isNotEmpty) {
+      _kategoris = provider.kategoris;
+    } else {
+      // Jika belum ada, load dari API
+      final createData = await provider.getCreateData();
+      if (createData != null && mounted) {
+        _kategoris = provider.kategoris; // Ambil dari provider setelah di-load
       }
     }
+
+    if (widget.hashid != null) {
+      // Edit mode - load existing data
+      print('🔄 [AlatFormPage] Loading edit data for hashid: ${widget.hashid}');
+
+      final editData = await provider.getEditData(widget.hashid!);
+
+      print('📦 [AlatFormPage] Edit data: $editData');
+
+      if (editData != null && mounted) {
+        // ✅ PERBAIKAN: editData SUDAH BERISI DATA ALAT LANGSUNG
+        // (bukan wrapper {alat: {...}})
+
+        _namaCtrl.text = editData['nama_alat'] ?? '';
+        _kelasCtrl.text = editData['kelas'] ?? '';
+        _merkCtrl.text = editData['merk'] ?? '';
+        _tipeCtrl.text = editData['tipe'] ?? '';
+        _noSeriCtrl.text = editData['no_seri'] ?? '';
+        _noIdentitasCtrl.text = editData['no_identitas'] ?? '';
+        _kapasitasCtrl.text = editData['kapasitas'] ?? '';
+        _dayaBacaCtrl.text = editData['daya_baca'] ?? '';
+        _jumlahCtrl.text = editData['jumlah']?.toString() ?? '';
+        _noSertifikatCtrl.text = editData['no_sertifikat'] ?? '';
+
+        // ✅ Format tanggal masa_berlaku
+        final masaBerlaku = editData['masa_berlaku'];
+        if (masaBerlaku != null && masaBerlaku.toString().isNotEmpty) {
+          _masaBerlakuCtrl.text = masaBerlaku.toString().split(' ')[0];
+        }
+
+        _selectedKategoriId = editData['kategori_id']?.toString();
+
+        // ✅ PERBAIKAN: Ambil kategoris dari provider (sudah di-load oleh getEditData)
+        if (provider.kategoris.isNotEmpty) {
+          _kategoris = provider.kategoris;
+        }
+
+        print('✅ [AlatFormPage] Data loaded successfully');
+        print('   - nama_alat: ${_namaCtrl.text}');
+        print('   - merk: ${_merkCtrl.text}');
+        print('   - kategori_id: $_selectedKategoriId');
+        print('   - kategoris count: ${_kategoris.length}');
+      } else {
+        print('❌ [AlatFormPage] Edit data is null');
+      }
+    }
+
+    if (mounted) setState(() => _loadingData = false);
   }
 
   @override
@@ -81,7 +120,6 @@ class _AlatFormPageState extends State<AlatFormPage>
     _jumlahCtrl.dispose();
     _noSertifikatCtrl.dispose();
     _masaBerlakuCtrl.dispose();
-    _fieldAnimController.dispose();
     super.dispose();
   }
 
@@ -96,14 +134,22 @@ class _AlatFormPageState extends State<AlatFormPage>
       initialDate: DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime(2035),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: Color(0xFFD97706)),
+        ),
+        child: child!,
+      ),
     );
     if (picked != null) {
       _masaBerlakuCtrl.text = picked.toString().split(' ')[0];
+      setState(() {});
     }
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _saving = true);
 
     final fields = {
@@ -120,45 +166,53 @@ class _AlatFormPageState extends State<AlatFormPage>
       'masa_berlaku': _masaBerlakuCtrl.text.trim(),
     };
 
-    bool ok;
+    if (_selectedKategoriId != null) {
+      fields['kategori_id'] = _selectedKategoriId!;
+    }
+
+    final provider = context.read<AlatProvider>();
+    bool success;
+
     if (widget.hashid == null) {
-      ok = await _provider.create(fields, fotoPath: _imageFile?.path);
+      success = await provider.create(fields, fotoPath: _imageFile?.path);
     } else {
-      ok = await _provider.update(
+      success = await provider.update(
         widget.hashid!,
         fields,
         fotoPath: _imageFile?.path,
       );
     }
 
-    if (ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.hashid == null
-                ? 'Alat berhasil ditambahkan'
-                : 'Alat berhasil diperbarui',
-          ),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.pop(context, true);
-    } else {
-      if (mounted) {
+    if (mounted) {
+      setState(() => _saving = false);
+
+      if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal menyimpan alat'),
+          SnackBar(
+            content: Text(
+              widget.hashid == null
+                  ? 'Alat berhasil ditambahkan'
+                  : 'Alat berhasil diperbarui',
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(provider.error ?? 'Gagal menyimpan data'),
             backgroundColor: Colors.red,
           ),
         );
       }
     }
-    setState(() => _saving = false);
   }
 
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.hashid != null;
+
     return Scaffold(
       backgroundColor: const Color(0xFFFEF9E7),
       appBar: AppBar(
@@ -168,112 +222,147 @@ class _AlatFormPageState extends State<AlatFormPage>
         elevation: 0,
         centerTitle: true,
       ),
-      body: FadeTransition(
-        opacity: _fieldFadeAnimation,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _staggeredField(
-                  0,
-                  _buildTextField(
-                    controller: _namaCtrl,
-                    label: 'Nama Alat',
-                    icon: Icons.build,
-                    validator: (v) => v!.isEmpty ? 'Wajib' : null,
-                  ),
+      body: _loadingData
+          ? const Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD97706)),
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _staggeredField(
+                      0,
+                      _buildTextField(
+                        controller: _namaCtrl,
+                        label: 'Nama Alat',
+                        icon: Icons.build,
+                        validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
+                      ),
+                    ),
+                    _staggeredField(
+                      1,
+                      _buildTextField(
+                        controller: _merkCtrl,
+                        label: 'Merk',
+                        icon: Icons.branding_watermark,
+                        validator: (v) => v!.isEmpty ? 'Wajib diisi' : null,
+                      ),
+                    ),
+                    _staggeredField(
+                      2,
+                      _buildTextField(
+                        controller: _tipeCtrl,
+                        label: 'Tipe',
+                        icon: Icons.category,
+                      ),
+                    ),
+                    _staggeredField(
+                      3,
+                      _buildTextField(
+                        controller: _kelasCtrl,
+                        label: 'Kelas',
+                        icon: Icons.grade,
+                      ),
+                    ),
+                    _staggeredField(
+                      4,
+                      _buildTextField(
+                        controller: _noSeriCtrl,
+                        label: 'No. Seri',
+                        icon: Icons.tag,
+                      ),
+                    ),
+                    _staggeredField(
+                      5,
+                      _buildTextField(
+                        controller: _noIdentitasCtrl,
+                        label: 'No. Identitas',
+                        icon: Icons.fingerprint,
+                      ),
+                    ),
+                    _staggeredField(
+                      6,
+                      _buildTextField(
+                        controller: _kapasitasCtrl,
+                        label: 'Kapasitas',
+                        icon: Icons.tune,
+                      ),
+                    ),
+                    _staggeredField(
+                      7,
+                      _buildTextField(
+                        controller: _dayaBacaCtrl,
+                        label: 'Daya Baca',
+                        icon: Icons.visibility,
+                      ),
+                    ),
+                    _staggeredField(
+                      8,
+                      _buildTextField(
+                        controller: _jumlahCtrl,
+                        label: 'Jumlah',
+                        icon: Icons.inventory,
+                        keyboardType: TextInputType.number,
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Wajib diisi';
+                          if (int.tryParse(v) == null) return 'Harus angka';
+                          return null;
+                        },
+                      ),
+                    ),
+                    _staggeredField(
+                      9,
+                      _buildTextField(
+                        controller: _noSertifikatCtrl,
+                        label: 'No. Sertifikat',
+                        icon: Icons.article,
+                      ),
+                    ),
+                    _staggeredField(10, _buildKategoriDropdown()),
+                    _staggeredField(11, _buildDateField()),
+                    _staggeredField(12, _buildImagePicker()),
+                    const SizedBox(height: 30),
+                    _staggeredField(13, _buildSaveButton(isEdit)),
+                  ],
                 ),
-                _staggeredField(
-                  1,
-                  _buildTextField(
-                    controller: _merkCtrl,
-                    label: 'Merk',
-                    icon: Icons.branding_watermark,
-                    validator: (v) => v!.isEmpty ? 'Wajib' : null,
-                  ),
-                ),
-                _staggeredField(
-                  2,
-                  _buildTextField(
-                    controller: _tipeCtrl,
-                    label: 'Tipe',
-                    icon: Icons.category,
-                  ),
-                ),
-                _staggeredField(
-                  3,
-                  _buildTextField(
-                    controller: _kelasCtrl,
-                    label: 'Kelas',
-                    icon: Icons.grade,
-                  ),
-                ),
-                _staggeredField(
-                  4,
-                  _buildTextField(
-                    controller: _noSeriCtrl,
-                    label: 'No. Seri',
-                    icon: Icons.tag,
-                  ),
-                ),
-                _staggeredField(
-                  5,
-                  _buildTextField(
-                    controller: _noIdentitasCtrl,
-                    label: 'No. Identitas',
-                    icon: Icons.fingerprint,
-                  ),
-                ),
-                _staggeredField(
-                  6,
-                  _buildTextField(
-                    controller: _kapasitasCtrl,
-                    label: 'Kapasitas',
-                    icon: Icons.tune,
-                  ),
-                ),
-                _staggeredField(
-                  7,
-                  _buildTextField(
-                    controller: _dayaBacaCtrl,
-                    label: 'Daya Baca',
-                    icon: Icons.visibility,
-                  ),
-                ),
-                _staggeredField(
-                  8,
-                  _buildTextField(
-                    controller: _jumlahCtrl,
-                    label: 'Jumlah',
-                    icon: Icons.inventory,
-                    keyboardType: TextInputType.number,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Wajib';
-                      if (int.tryParse(v) == null) return 'Harus angka';
-                      return null;
-                    },
-                  ),
-                ),
-                _staggeredField(
-                  9,
-                  _buildTextField(
-                    controller: _noSertifikatCtrl,
-                    label: 'No. Sertifikat',
-                    icon: Icons.article,
-                  ),
-                ),
-                _staggeredField(10, _buildDateField()),
-                _staggeredField(11, _buildImagePicker()),
-                const SizedBox(height: 30),
-                _staggeredField(12, _buildSaveButton(isEdit)),
-              ],
+              ),
             ),
-          ),
+    );
+  }
+
+  Widget _buildKategoriDropdown() {
+    return DropdownButtonFormField<String>(
+      value: _selectedKategoriId,
+      decoration: InputDecoration(
+        labelText: 'Kategori',
+        prefixIcon: const Icon(Icons.category, size: 22),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFFBBF24), width: 2),
         ),
       ),
+      items: _kategoris.map((kat) {
+        return DropdownMenuItem<String>(
+          value: kat['id'].toString(),
+          child: Text(kat['nama'] ?? '-'),
+        );
+      }).toList(),
+      onChanged: (v) => setState(() => _selectedKategoriId = v),
     );
   }
 
@@ -322,6 +411,10 @@ class _AlatFormPageState extends State<AlatFormPage>
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: Color(0xFFFBBF24), width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.red, width: 1),
         ),
         contentPadding: const EdgeInsets.symmetric(
           vertical: 16,
@@ -408,7 +501,23 @@ class _AlatFormPageState extends State<AlatFormPage>
               const SizedBox(width: 12),
               Expanded(
                 child: _imageFile != null
-                    ? Text(_imageFile!.name, overflow: TextOverflow.ellipsis)
+                    ? Row(
+                        children: [
+                          const Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _imageFile!.path.split('/').last,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      )
                     : const Text(
                         'Belum ada foto',
                         style: TextStyle(color: Colors.grey),
@@ -422,23 +531,23 @@ class _AlatFormPageState extends State<AlatFormPage>
   }
 
   Widget _buildSaveButton(bool isEdit) {
-    return SizedBox(
-      width: double.infinity,
-      height: 52,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: _saving
-            ? const Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFFD97706),
-                  ),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: _saving
+          ? const Center(
+              child: SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFFD97706),
                 ),
-              )
-            : ElevatedButton(
+              ),
+            )
+          : SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton(
                 onPressed: _save,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFD97706),
@@ -446,11 +555,12 @@ class _AlatFormPageState extends State<AlatFormPage>
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
+                  elevation: 2,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(isEdit ? Icons.save : Icons.add),
+                    Icon(isEdit ? Icons.save : Icons.add, size: 22),
                     const SizedBox(width: 8),
                     Text(
                       isEdit ? 'Simpan Perubahan' : 'Tambahkan Alat',
@@ -462,7 +572,7 @@ class _AlatFormPageState extends State<AlatFormPage>
                   ],
                 ),
               ),
-      ),
+            ),
     );
   }
 }

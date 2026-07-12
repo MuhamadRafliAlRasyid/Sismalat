@@ -67,6 +67,15 @@ class _QRScannerPageState extends State<QRScannerPage>
   Future<void> _handleScan(String rawValue) async {
     if (_isProcessing) return;
 
+    // ✅ Validasi user login
+    final isLoggedIn = await AuthService.isLoggedIn();
+    if (!isLoggedIn) {
+      _showFeedback('Silakan login terlebih dahulu', isError: true);
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     final hashid = _extractHashId(rawValue);
     if (hashid.isEmpty) {
       _showFeedback('QR Code tidak valid', isError: true);
@@ -77,9 +86,11 @@ class _QRScannerPageState extends State<QRScannerPage>
     HapticFeedback.mediumImpact();
 
     try {
-      await AuthService.saveTempSparepart(hashid);
+      // ✅ PERBAIKAN: Ganti saveTempSparepart → saveTempAlat
+      await AuthService.saveTempAlat(hashid);
+
       if (!mounted) return;
-      _showFeedback('QR berhasil dibaca: $hashid', isError: false);
+      _showFeedback('✅ QR Alat berhasil dibaca', isError: false);
 
       await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) {
@@ -87,7 +98,7 @@ class _QRScannerPageState extends State<QRScannerPage>
       }
     } catch (e) {
       if (!mounted) return;
-      _showFeedback('Gagal menyimpan QR Code', isError: true);
+      _showFeedback('Gagal menyimpan data QR', isError: true);
       setState(() => _isProcessing = false);
     }
   }
@@ -120,37 +131,61 @@ class _QRScannerPageState extends State<QRScannerPage>
       );
   }
 
-  /// Ekstrak hash ID dari berbagai format QR Code
+  /// ✅ PERBAIKAN: Ekstrak hash ID dari berbagai format QR Code
+  /// Prioritas: alat_id > hashid langsung > path terakhir
   String _extractHashId(String value) {
     try {
       // Jika mengandung query string (URL)
       if (value.contains('?')) {
         final uri = Uri.parse(value);
 
-        // Prioritas 1: alat_id
+        // ✅ Prioritas 1: alat_id (untuk inventaris alat)
         final alatId = uri.queryParameters['alat_id'];
-        if (alatId != null && alatId.isNotEmpty) return alatId;
+        if (alatId != null && alatId.isNotEmpty) {
+          print('🔍 [QR] Found alat_id: $alatId');
+          return alatId;
+        }
 
-        // Prioritas 2: spareparts_id (untuk kompatibilitas lama)
-        final sparepartId = uri.queryParameters['spareparts_id'];
-        if (sparepartId != null && sparepartId.isNotEmpty) return sparepartId;
+        // ✅ Prioritas 2: hashid (untuk kompatibilitas)
+        final hashid = uri.queryParameters['hashid'];
+        if (hashid != null && hashid.isNotEmpty) {
+          print('🔍 [QR] Found hashid: $hashid');
+          return hashid;
+        }
 
-        // Jika tidak ada, ambil parameter pertama yang ada
+        // ✅ Prioritas 3: id (generic)
+        final id = uri.queryParameters['id'];
+        if (id != null && id.isNotEmpty) {
+          print('🔍 [QR] Found id: $id');
+          return id;
+        }
+
+        // Jika tidak ada parameter yang dikenal, ambil parameter pertama
         if (uri.queryParameters.isNotEmpty) {
-          return uri.queryParameters.values.first;
+          final firstParam = uri.queryParameters.values.first;
+          print('🔍 [QR] Using first param: $firstParam');
+          return firstParam;
         }
       }
 
-      // Jika path biasa (tanpa query), ambil segmen terakhir
+      // ✅ Jika path biasa (tanpa query), ambil segmen terakhir
       if (value.contains('/')) {
         final segments = value.split('/');
         final last = segments.last;
-        if (last.isNotEmpty && !last.contains('?')) return last;
+        // Bersihkan dari query string jika ada
+        final cleanLast = last.split('?').first;
+        if (cleanLast.isNotEmpty) {
+          print('🔍 [QR] Found path segment: $cleanLast');
+          return cleanLast;
+        }
       }
 
-      // Fallback: trim nilai mentah
-      return value.trim();
-    } catch (_) {
+      // ✅ Fallback: trim nilai mentah (hashid langsung)
+      final trimmed = value.trim();
+      print('🔍 [QR] Using raw value: $trimmed');
+      return trimmed;
+    } catch (e) {
+      print('❌ [QR] Error extracting hashid: $e');
       return value.trim();
     }
   }
@@ -160,8 +195,11 @@ class _QRScannerPageState extends State<QRScannerPage>
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Scan QR Barang'),
+        title: const Text('Scan QR Alat'), // ✅ GANTI dari "Barang"
         centerTitle: true,
+        backgroundColor: const Color(0xFFD97706),
+        foregroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
@@ -190,9 +228,58 @@ class _QRScannerPageState extends State<QRScannerPage>
           // Overlay semi-transparan dengan area scan
           _buildScanOverlay(),
 
+          // Info teks di atas
+          Positioned(
+            top: 20,
+            left: 20,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.7),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.qr_code_scanner, color: Colors.white, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Arahkan kamera ke QR Code alat',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           // Indikator loading
           if (_isProcessing)
-            const Center(child: CircularProgressIndicator(color: Colors.white)),
+            Container(
+              color: Colors.black54,
+              child: const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(color: Colors.white),
+                    SizedBox(height: 16),
+                    Text(
+                      'Memproses QR Code...',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           // Tombol flash
           Positioned(
@@ -206,6 +293,18 @@ class _QRScannerPageState extends State<QRScannerPage>
                 _flashOn ? Icons.flash_on : Icons.flash_off,
                 color: Colors.black87,
               ),
+            ),
+          ),
+
+          // Tombol switch camera (opsional)
+          Positioned(
+            bottom: 40,
+            left: 30,
+            child: FloatingActionButton(
+              mini: true,
+              backgroundColor: Colors.white.withOpacity(0.9),
+              onPressed: () => _controller.switchCamera(),
+              child: const Icon(Icons.flip_camera_ios, color: Colors.black87),
             ),
           ),
         ],
@@ -225,8 +324,15 @@ class _QRScannerPageState extends State<QRScannerPage>
             width: 250,
             height: 250,
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.cyanAccent, width: 2),
+              border: Border.all(color: Colors.cyanAccent, width: 3),
               borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.cyanAccent.withOpacity(0.3),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
             ),
             child: const _ScannerAnimation(),
           ),
@@ -259,7 +365,7 @@ class _QRScannerPageState extends State<QRScannerPage>
                   builder: (_) => AlertDialog(
                     title: const Text('Izin Kamera'),
                     content: const Text(
-                      'Silakan buka Pengaturan > Aplikasi > Inventaris > Izin, '
+                      'Silakan buka Pengaturan > Aplikasi > Sismalat > Izin, '
                       'lalu aktifkan izin Kamera.',
                     ),
                     actions: [
@@ -345,7 +451,7 @@ class _ScannerAnimationState extends State<_ScannerAnimation>
               right: 0,
               top: _anim.value,
               child: Container(
-                height: 2,
+                height: 3,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
@@ -354,6 +460,13 @@ class _ScannerAnimationState extends State<_ScannerAnimation>
                       Colors.cyanAccent.withOpacity(0),
                     ],
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.cyanAccent.withOpacity(0.5),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
               ),
             ),

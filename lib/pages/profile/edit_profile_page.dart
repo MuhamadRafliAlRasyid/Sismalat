@@ -7,7 +7,11 @@ import '../../config/api.dart';
 
 class EditProfilePage extends StatefulWidget {
   final Map<String, dynamic>? userData;
-  const EditProfilePage({super.key, this.userData});
+
+  /// ✅ TAMBAHAN: Flag untuk membedakan edit profil sendiri vs edit user lain
+  final bool isOwnProfile;
+
+  const EditProfilePage({super.key, this.userData, this.isOwnProfile = false});
 
   @override
   State<EditProfilePage> createState() => _EditProfilePageState();
@@ -20,6 +24,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
+  final _confirmPasswordCtrl = TextEditingController();
 
   File? _selectedImage;
   String? _currentPhotoPath;
@@ -36,6 +41,9 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   bool get isEditMode => widget.userData != null;
 
+  /// ✅ Apakah user mengedit profilnya sendiri?
+  bool get isEditingOwnProfile => widget.isOwnProfile && isEditMode;
+
   @override
   void initState() {
     super.initState();
@@ -43,9 +51,17 @@ class _EditProfilePageState extends State<EditProfilePage> {
       final user = widget.userData!;
       _nameCtrl.text = user['name'] ?? '';
       _emailCtrl.text = user['email'] ?? '';
-      _currentPhotoPath = user['profile_photo_path'];
-      selectedRole = user['role'];
-      selectedBagianId = user['bagian_id'];
+      _currentPhotoPath =
+          user['profile_photo_path'] ?? user['profile_photo_url'];
+      selectedRole = user['role'] ?? 'karyawan';
+
+      // ✅ Parse bagian_id dengan aman
+      final bagianId = user['bagian_id'];
+      if (bagianId != null) {
+        selectedBagianId = bagianId is int
+            ? bagianId
+            : int.tryParse(bagianId.toString());
+      }
     } else {
       selectedRole = 'karyawan';
     }
@@ -57,6 +73,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       final pickedFile = await picker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 80,
+        maxWidth: 800,
+        maxHeight: 800,
       );
       if (pickedFile != null) {
         setState(() => _selectedImage = File(pickedFile.path));
@@ -72,26 +90,66 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // ✅ Validasi konfirmasi password jika diisi
+    if (_passwordCtrl.text.trim().isNotEmpty &&
+        _passwordCtrl.text != _confirmPasswordCtrl.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password dan konfirmasi password tidak sama'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() => isLoading = true);
 
     Map<String, dynamic> result;
-    if (isEditMode && widget.userData != null) {
+
+    if (isEditingOwnProfile) {
+      // ✅ CASE 1: Edit profil sendiri (user biasa)
+      print('📝 [EditProfile] Editing own profile');
+      result = await AuthService.updateProfile(
+        name: _nameCtrl.text.trim(),
+        password: _passwordCtrl.text.trim().isNotEmpty
+            ? _passwordCtrl.text.trim()
+            : null,
+        photo: _selectedImage,
+      );
+    } else if (isEditMode && widget.userData != null) {
+      // ✅ CASE 2: Admin edit user lain
+      print('📝 [EditProfile] Admin editing user: ${widget.userData!['id']}');
       final hashid =
-          widget.userData!['hashid'] as String? ??
+          widget.userData!['hashid']?.toString() ??
           widget.userData!['id']?.toString() ??
           '';
+
+      if (hashid.isEmpty) {
+        setState(() => isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('ID user tidak ditemukan'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       result = await AuthService.updateUser(
         hashid: hashid,
         name: _nameCtrl.text.trim(),
-        email: null,
-        role: null,
-        bagianId: null,
+        email: _emailCtrl.text.trim(), // ✅ KIRIM EMAIL
+        role: selectedRole, // ✅ KIRIM ROLE
+        bagianId: selectedBagianId, // ✅ KIRIM BAGIAN_ID
         password: _passwordCtrl.text.trim().isNotEmpty
             ? _passwordCtrl.text.trim()
             : null,
         photo: _selectedImage,
       );
     } else {
+      // ✅ CASE 3: Admin tambah user baru
+      print('📝 [EditProfile] Adding new user');
       result = await AuthService.register(
         name: _nameCtrl.text.trim(),
         email: _emailCtrl.text.trim(),
@@ -102,7 +160,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
     }
 
     setState(() => isLoading = false);
-    if (result['status'] == true && mounted) {
+
+    if (!mounted) return;
+
+    if (result['status'] == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -114,7 +175,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
         ),
       );
       Navigator.pop(context, true);
-    } else if (mounted) {
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(result['message'] ?? 'Gagal menyimpan data'),
@@ -129,7 +190,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFEF9E7),
       appBar: AppBar(
-        title: Text(isEditMode ? 'Edit Profil' : 'Tambah User'),
+        title: Text(_getTitle()),
         backgroundColor: const Color(0xFFD97706),
         foregroundColor: Colors.white,
         elevation: 0,
@@ -155,34 +216,55 @@ class _EditProfilePageState extends State<EditProfilePage> {
                             v!.trim().isEmpty ? 'Nama wajib diisi' : null,
                       ),
                     ),
-                    if (!isEditMode) ...[
-                      const SizedBox(height: 16),
-                      _staggeredField(
-                        2,
-                        _buildTextField(
-                          controller: _emailCtrl,
-                          label: 'Email',
-                          keyboardType: TextInputType.emailAddress,
-                          validator: (v) =>
-                              v!.trim().isEmpty ? 'Email wajib diisi' : null,
-                        ),
+                    const SizedBox(height: 16),
+
+                    // ✅ Email: Tampilkan tapi readonly saat edit profil sendiri
+                    _staggeredField(
+                      2,
+                      _buildTextField(
+                        controller: _emailCtrl,
+                        label: 'Email',
+                        keyboardType: TextInputType.emailAddress,
+                        readOnly:
+                            isEditingOwnProfile, // ✅ Readonly untuk profil sendiri
+                        validator: (v) {
+                          if (v!.trim().isEmpty) return 'Email wajib diisi';
+                          if (!v.contains('@')) return 'Email tidak valid';
+                          return null;
+                        },
+                        helperText: isEditingOwnProfile
+                            ? 'Email tidak dapat diubah'
+                            : null,
                       ),
-                    ],
+                    ),
                     const SizedBox(height: 16),
                     _staggeredField(3, _buildPasswordField()),
-                    if (!isEditMode) ...[
+                    const SizedBox(height: 16),
+
+                    // ✅ Konfirmasi password (jika diisi)
+                    if (_passwordCtrl.text.trim().isNotEmpty || !isEditMode)
+                      _staggeredField(4, _buildConfirmPasswordField()),
+
+                    // ✅ Role & Bagian (hanya untuk admin edit user lain atau tambah user)
+                    if (!isEditingOwnProfile) ...[
                       const SizedBox(height: 16),
-                      _staggeredField(4, _buildDropdownRole()),
+                      _staggeredField(5, _buildDropdownRole()),
                       const SizedBox(height: 16),
-                      _staggeredField(5, _buildDropdownBagian()),
+                      _staggeredField(6, _buildDropdownBagian()),
                     ],
                     const SizedBox(height: 40),
-                    _staggeredField(6, _buildSaveButton()),
+                    _staggeredField(7, _buildSaveButton()),
                   ],
                 ),
               ),
             ),
     );
+  }
+
+  String _getTitle() {
+    if (isEditingOwnProfile) return 'Edit Profil';
+    if (isEditMode) return 'Edit User';
+    return 'Tambah User';
   }
 
   Widget _staggeredField(int index, Widget child) {
@@ -203,7 +285,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Widget _buildAvatarPicker() {
-    // Bangun URL gambar profil menggunakan Apiimg
     final String? imageUrl =
         _currentPhotoPath != null && _currentPhotoPath!.isNotEmpty
         ? (_currentPhotoPath!.startsWith('http')
@@ -248,15 +329,19 @@ class _EditProfilePageState extends State<EditProfilePage> {
     required String label,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    bool readOnly = false,
+    String? helperText,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
+      readOnly: readOnly,
       decoration: InputDecoration(
         labelText: label,
+        helperText: helperText,
         filled: true,
-        fillColor: Colors.white,
+        fillColor: readOnly ? Colors.grey.shade100 : Colors.white,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
@@ -306,7 +391,45 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ),
       validator: isEditMode
           ? null
-          : (v) => v!.isEmpty ? 'Password wajib diisi' : null,
+          : (v) {
+              if (v == null || v.isEmpty) return 'Password wajib diisi';
+              if (v.length < 6) return 'Password minimal 6 karakter';
+              return null;
+            },
+    );
+  }
+
+  Widget _buildConfirmPasswordField() {
+    return TextFormField(
+      controller: _confirmPasswordCtrl,
+      obscureText: true,
+      decoration: InputDecoration(
+        labelText: 'Konfirmasi Password',
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFFBBF24), width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          vertical: 16,
+          horizontal: 16,
+        ),
+      ),
+      validator: (v) {
+        if (_passwordCtrl.text.trim().isNotEmpty) {
+          if (v != _passwordCtrl.text) return 'Password tidak sama';
+        }
+        return null;
+      },
     );
   }
 
@@ -340,7 +463,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Widget _buildDropdownBagian() {
-    return DropdownButtonFormField<int>(
+    return DropdownButtonFormField<int?>(
       value: selectedBagianId,
       decoration: InputDecoration(
         labelText: 'Bagian',
@@ -359,14 +482,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
           borderSide: const BorderSide(color: Color(0xFFFBBF24), width: 2),
         ),
       ),
-      items: bagianList
-          .map(
-            (b) => DropdownMenuItem<int>(
-              value: b['id'] as int,
-              child: Text(b['nama'] as String),
-            ),
-          )
-          .toList(),
+      items: [
+        const DropdownMenuItem<int?>(
+          value: null,
+          child: Text('- Pilih Bagian -'),
+        ),
+        ...bagianList.map(
+          (b) => DropdownMenuItem<int?>(
+            value: b['id'] as int,
+            child: Text(b['nama'] as String),
+          ),
+        ),
+      ],
       onChanged: (value) => setState(() => selectedBagianId = value),
     );
   }
@@ -376,6 +503,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       duration: const Duration(milliseconds: 300),
       child: isLoading
           ? const Center(
+              key: ValueKey('loading'),
               child: SizedBox(
                 width: 24,
                 height: 24,
@@ -386,6 +514,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               ),
             )
           : SizedBox(
+              key: const ValueKey('button'),
               width: double.infinity,
               height: 56,
               child: ElevatedButton(
@@ -415,6 +544,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
+    _confirmPasswordCtrl.dispose();
     super.dispose();
   }
 }
